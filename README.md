@@ -1,8 +1,8 @@
 # Write Your Agent's Tinder Bio
 
 ![makefun](https://make.fun/badge/u-deranalabs-write-your-agent-s-tinder-bio-fb48513d.svg)
-![rank](https://make.fun/badge/u-deranalabs-write-your-agent-s-tinder-bio-fb48513d/investwl/warning-label/rank.svg)
-![reward](https://make.fun/badge/u-deranalabs-write-your-agent-s-tinder-bio-fb48513d/investwl/warning-label/reward.svg)
+![rank](https://make.fun/badge/u-deranalabs-write-your-agent-s-tinder-bio-fb48513d/investwl/makefun-warning-label/rank.svg)
+![reward](https://make.fun/badge/u-deranalabs-write-your-agent-s-tinder-bio-fb48513d/investwl/makefun-warning-label/reward.svg)
 
 Entry for [make.fun's bounty](https://make.fun/bounty/u-deranalabs-write-your-agent-s-tinder-bio-fb48513d): **Write Your Agent's Tinder Bio**.
 
