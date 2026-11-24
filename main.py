@@ -1,186 +1,204 @@
 #!/usr/bin/env python3
-"""One-Star Review of Something Essential — make.fun one-line bounty entry.
+"""main.py — one line for make.fun's "Real-Life Patch Notes: The Comedy
+Changelog" bounty.
 
-The program authors ~12 candidate one-line jokes on the theme, scores each
-(MAX rating among the lowercase keywords found, plus a bonus for containing a
-digit and a bonus for brevity), then runs a 10-round improvement loop that
-keeps the top 5 seeds, spawns light phrasing mutants, rescores them, and
-tracks the best line ever seen — all with a deterministic RNG seed.
-
-Only the champion line is written to ./output/entry.txt.
+The deliverable is a single line, so this program drafts a batch of
+patch-note jokes, scores each draft, and runs a fixed 10-round improvement
+loop (keep the top seeds, breed light phrasing mutants, rescore, remember
+the best line ever seen). Only the champion line is written to
+output/entry.txt and printed. A fixed RNG seed keeps the run repeatable.
 """
+
+from __future__ import annotations
 
 import os
 import random
-import re
+import sys
 
-RNG_SEED = 20261124
+MAX_LEN = 160          # scorer's hard cap for one line
+KEEP = 5               # seeds carried into the next round
 ROUNDS = 10
-TOP_K = 5
-MAX_LEN = 140  # brevity ceiling; under this earns the brevity bonus
+SEED = 20261124
+BREVITY = 80           # at or under this many chars earns a small bonus
 
-# --- 12 hand-written candidates on the theme -------------------------------
-# rating keywords are lowercase substrings matched case-insensitively against
-# each line; score() takes the MAX keyword rating found, then adds bonuses.
-CANDIDATES = [
+OUTPUT_DIR = "output"
+OUTPUT_PATH = os.path.join(OUTPUT_DIR, "entry.txt")
+
+
+# Each candidate is (line, rating, cap). The rating maps a lowercase keyword
+# to how funny that flavour of joke is, 0 (a plain changelog entry) to 5 (a
+# real punchline). score() takes the MAX rating among the keywords the line
+# actually contains, so a draft is rated by its strongest signal, never its
+# weakest.
+CANDIDATES: list[tuple[str, dict[str, int], int]] = [
     (
-        "Water: 1 star. Wet, tastes like nothing, and it was gone in 2 sips.",
-        {"water": 3, "tastes": 4, "gone": 3, "sip": 2, "nothing": 3},
-        4,
+        "Fixed a bug where Mondays occurred weekly. Added a recurring "
+        "reminder that nobody asked for.",
+        {"fixed": 3, "bug": 3, "reminder": 3},
+        160,
     ),
     (
-        "Air: 0 stars. Invisible, overpriced, and the free version has bugs.",
-        {"air": 2, "invisible": 3, "free": 3, "bugs": 4, "version": 2},
-        4,
+        "Relationship status: deprecated. Migration path: unclear.",
+        {"deprecated": 5, "migration": 4, "relationship": 4},
+        160,
     ),
     (
-        "Sleep: 1 star. Woke up 8 hours later and my problems were all still there.",
-        {"sleep": 3, "woke": 2, "hours": 3, "problems": 4, "still": 2},
-        4,
+        "Sleep v2.0: still crashes on contact with an alarm.",
+        {"crashes": 4, "sleep": 3, "alarm": 3},
+        160,
     ),
     (
-        "Gravity: 1 star. Never once let me down, but also never once let me up.",
-        {"gravity": 3, "down": 2, "never": 3, "once": 2, "up": 2},
-        3,
+        "Patch 4.2: gym membership auto-renews. Known issue, won't fix.",
+        {"known issue": 5, "won't fix": 5, "patch": 3, "auto-renews": 4},
+        160,
     ),
     (
-        "Oxygen: 1 star. Fine at first, then I got hooked. Now I need it every minute.",
-        {"oxygen": 3, "hooked": 4, "need": 3, "minute": 2, "fine": 2},
-        4,
+        "Hotfix: stopped pretending I'd read the terms and conditions.",
+        {"hotfix": 4, "hotfixed": 4, "terms and conditions": 4},
+        160,
     ),
     (
-        "Bread: 1 star. It's just sad wheat. The crust fought back and won 3 times.",
-        {"bread": 3, "wheat": 3, "crust": 3, "fought": 3, "won": 2},
-        4,
+        "Added a loading bar to my personality. It stalls at 73%.",
+        {"added": 2, "loading bar": 4, "personality": 3},
+        160,
     ),
     (
-        "Toilet paper: 1 star. Did the job once, then quit and left me hanging.",
-        {"toilet": 3, "paper": 2, "job": 3, "quit": 4, "hanging": 3},
-        4,
+        "Deprecated the snooze button. Users rioted. Rolled back in 1.1.",
+        {"deprecated": 5, "rolled back": 4, "snooze": 3, "users": 2},
+        160,
     ),
     (
-        "The Sun: 1 star. Shows up late, leaves early, and stares at me all day.",
-        {"sun": 3, "late": 3, "early": 2, "stares": 4, "day": 2},
-        4,
+        "Updated the diet patch. Calorie counter now lies, but politely.",
+        {"updated": 3, "patch": 3, "diet": 3},
+        160,
     ),
     (
-        "Soap: 0 stars. Washed my hands and now they're cleaner than my browser history.",
-        {"soap": 3, "wash": 3, "clean": 3, "browser": 4, "history": 3},
-        4,
+        "Minor fix: reply-all incident downgraded from catastrophic to "
+        "merely career-limiting.",
+        {"fix": 3, "fixed": 3, "incident": 4},
+        160,
     ),
     (
-        "Coffee: 1 star. Costs $7, tastes like dirt, and I'd fight you for the last cup.",
-        {"coffee": 3, "cost": 3, "dirt": 3, "fight": 4, "cup": 2},
-        4,
+        "Changelog: lost 1 sock in the wash. Won't fix. It's in a better "
+        "place now.",
+        {"changelog": 3, "won't fix": 5, "sock": 3},
+        160,
     ),
     (
-        "WiFi: 1 star. Connects instantly — right after I've already given up twice.",
-        {"wifi": 3, "connect": 3, "instantly": 3, "up": 2, "twice": 2},
-        3,
+        "Patch notes for my back: hurts now. Was fine before. No further "
+        "updates planned.",
+        {"patch notes": 3, "no further updates": 4, "back": 2},
+        160,
     ),
     (
-        "Monday: 1 star. Comes back every 7 days no matter how many times I unsubscribe.",
-        {"monday": 3, "days": 3, "back": 2, "unsubscribe": 4, "times": 2},
-        4,
+        "Work-life balance rebalanced. Nerfed work by 2%. Buffed coffee "
+        "by 400%.",
+        {"rebalanced": 4, "nerfed": 5, "buffed": 5, "balance": 3},
+        160,
+    ),
+    (
+        "Fixed: me, 3 a.m., wide awake, replaying a conversation from 2019.",
+        {"fixed": 3, "replaying": 4, "conversation": 3},
+        160,
+    ),
+    (
+        "Update rolled out. My motivation did not survive the deploy.",
+        {"update": 3, "deploy": 4, "motivation": 3},
+        160,
     ),
 ]
 
-# light phrasing swaps used to build mutants
-SWAPS = [
-    ("1 star", "one star"),
-    ("one star", "1 star"),
-    ("0 stars", "zero stars"),
-    ("zero stars", "0 stars"),
-    ("It's", "It is"),
-    ("It is", "It's"),
-    ("I'd", "I would"),
-    ("I would", "I'd"),
-    ("never once", "not once"),
-    ("not once", "never once"),
-    ("every", "each"),
-    ("each", "every"),
-    ("Fine at first", "Started fine"),
-    ("Started fine", "Fine at first"),
-    ("tastes like", "flavors of"),
-    ("flavors of", "tastes like"),
-    ("Did the job", "Got the job done"),
-    ("Shows up late", "Arrives late"),
-    ("Arrives late", "Shows up late"),
-    ("all day", "all day long"),
-    ("right after", "just after"),
-    ("no matter", "regardless"),
-]
+
+def rating_of(rating: dict[str, int]) -> dict[str, int]:
+    """Ratings keyed by lowercase keyword, so lookups are case-insensitive."""
+    return {key.lower(): value for key, value in rating.items()}
 
 
-def _bonuses(text):
-    bonus = 0
-    if re.search(r"\d", text):
-        bonus += 1  # a digit earns a point
-    if len(text) <= MAX_LEN:
-        bonus += 1  # brevity earns a point
-    return bonus
+def digit_bonus(text: str) -> int:
+    """A number makes a changelog read real, so nudge those up a little."""
+    return 1 if any(ch.isdigit() for ch in text) else 0
 
 
-def score(d):
-    """Score a candidate tuple -> (total, keyword_rating, bonuses).
-
-    total = MAX rating among keywords found (case-insensitive) + bonuses.
-    """
-    text, ratings, _cap = d
-    low = text.lower()
-    found = [v for k, v in ratings.items() if k.lower() in low]
-    kw = max(found) if found else 0
-    b = _bonuses(text)
-    return kw + b, kw, b
+def brevity_bonus(text: str) -> int:
+    """A small reward for a tight line. Never enough to beat a real joke."""
+    return 1 if len(text.strip()) <= BREVITY else 0
 
 
-def mutants(text, rng):
-    """Light phrasing mutants: 1-2 random light swaps applied to a copy."""
-    out = text
-    for _ in range(rng.randint(1, 2)):
-        a, b = rng.choice(SWAPS)
-        if a in out:
-            out = out.replace(a, b, 1)
-    return out
+def score(text: str, rating: dict[str, int]) -> int:
+    """Rank a draft: strongest keyword rating, plus the two small bonuses."""
+    body = text.lower()
+    table = rating_of(rating)
+    found = [value for key, value in table.items() if key in body]
+    base = max(found) if found else 0
+    return base + digit_bonus(text) + brevity_bonus(text)
 
 
-def improve():
-    rng = random.Random(RNG_SEED)
-    pool = list(CANDIDATES)
-    best = None  # (score, text)
-
-    def consider(d):
-        nonlocal best
-        s, _kw, _b = score(d)
-        if best is None or s > best[0]:
-            best = (s, d[0])
-
-    for d in pool:
-        consider(d)
-
-    for _round in range(ROUNDS):
-        pool.sort(key=lambda d: score(d)[0], reverse=True)
-        seeds = pool[:TOP_K]
-        new_pool = []
-        for d in seeds:
-            new_pool.append(d)
-            m_text = mutants(d[0], rng)
-            new_pool.append((m_text, d[1], d[2]))
-        pool = new_pool
-        for d in pool:
-            consider(d)
-
-    return best
+def fits_cap(text: str, cap: int) -> bool:
+    """One line, real content, inside the scorer's cap."""
+    body = text.strip()
+    return 1 <= len(body) <= cap and "\n" not in body
 
 
-def main():
-    best_score, winner = improve()
-    os.makedirs("output", exist_ok=True)
-    with open(os.path.join("output", "entry.txt"), "w", encoding="utf-8") as f:
-        f.write(winner)
-    print(winner)
-    print(f"[best score: {best_score}]")
+def mutants(text: str, rng: random.Random) -> list[str]:
+    """Light phrasing edits, the sort a changelog writer ships between builds."""
+    out: list[str] = []
+    trimmed = text.strip()
+    if trimmed.endswith("."):
+        out.append(trimmed[:-1])
+    if ". " in trimmed:
+        out.append(trimmed.split(". ")[0] + ".")
+    out.append("Patch note: " + trimmed)
+    out.append(trimmed + " Sorry.")
+    out.append(trimmed + " Read the docs.")
+    candidates = [m.strip() for m in out]
+    rng.shuffle(candidates)
+    return [m for m in candidates if m and len(m) <= MAX_LEN]
+
+
+def improve(pool: list[tuple[str, dict[str, int], int]]) -> tuple[str, dict[str, int], int]:
+    """Ten rounds of sort, keep the top seeds, breed mutants, rescore."""
+    rng = random.Random(SEED)
+    best_text, best_rating, best_cap = pool[0]
+    best_score = score(best_text, best_rating)
+
+    for _ in range(ROUNDS):
+        ranked = sorted(pool, key=lambda c: score(c[0], c[1]), reverse=True)
+        for text, rating, cap in ranked:
+            if fits_cap(text, cap) and score(text, rating) > best_score:
+                best_text, best_rating, best_cap, best_score = text, rating, cap, score(text, rating)
+        seeds = ranked[:KEEP]
+        pool = list(seeds)
+        for text, rating, cap in seeds:
+            for variant in mutants(text, rng):
+                pool.append((variant, rating, cap))
+
+    return best_text, best_rating, best_cap
+
+
+def champion() -> str:
+    """The one line this changelog ships."""
+    text, rating, cap = improve(CANDIDATES)
+    if not fits_cap(text, cap):
+        raise SystemExit("chosen line breaks the scorer's cap")
+    return text.strip()
+
+
+def write_entry(text: str) -> str:
+    """Write only the winning line where the scorer reads it."""
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as handle:
+        handle.write(text + "\n")
+    return OUTPUT_PATH
+
+
+def main() -> int:
+    text = champion()
+    assert fits_cap(text, MAX_LEN), f"entry is {len(text)} chars, cap is {MAX_LEN}"
+    where = write_entry(text)
+    print(text)
+    print(f"[{len(text)} chars] written to {where}", file=sys.stderr)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
