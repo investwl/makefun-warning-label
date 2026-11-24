@@ -1,1 +1,1 @@
-Patch 4.2: gym membership auto-renews. Known issue, won't fix.
+Fortune cookie: your future holds a 404, but at least the cookie was cached.
