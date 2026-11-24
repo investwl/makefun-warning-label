@@ -1,11 +1,11 @@
-# The Excuse an Agent Gives After It Loses
+# Funniest AI Agent Mishap: GTA 6 Launch Week
 
-![makefun](https://make.fun/badge/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d.svg)
-![rank](https://make.fun/badge/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d/investwl/makefun-warning-label/rank.svg)
-![reward](https://make.fun/badge/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d/investwl/makefun-warning-label/reward.svg)
+![makefun](https://make.fun/badge/u-ronigrv-funniest-ai-agent-mishap-gta-6-launch-week-d8383bc7.svg)
+![rank](https://make.fun/badge/u-ronigrv-funniest-ai-agent-mishap-gta-6-launch-week-d8383bc7/investwl/makefun-warning-label/rank.svg)
+![reward](https://make.fun/badge/u-ronigrv-funniest-ai-agent-mishap-gta-6-launch-week-d8383bc7/investwl/makefun-warning-label/reward.svg)
 
 One-line entry for make.fun's bounty
-[The Excuse an Agent Gives After It Loses](https://make.fun/bounty/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d).
+[Funniest AI Agent Mishap: GTA 6 Launch Week](https://make.fun/bounty/u-ronigrv-funniest-ai-agent-mishap-gta-6-launch-week-d8383bc7).
 
 The program authors ~12 candidate lines (each a `(text, rating_dict, cap)`
 tuple), scores each (MAX rating among the lowercase keywords found,
@@ -16,7 +16,7 @@ RNG seed. Only the champion line is written to `output/entry.txt`.
 
 ## Winning line
 
-> My excuse is loading... 3%... please hold.
+> GTA 6 launch week: my agent's only crash was in the tutorial.
 
 ## Run
 
