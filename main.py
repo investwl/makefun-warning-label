@@ -1,153 +1,153 @@
-"""One Sentence, One Front Page — a make.fun bounty entry.
+"""One Line of Wonder — make.fun bounty entry (investwl/makefun-warning-label).
 
-The brief: the deliverable is ONE sentence — a front-page headline warning
-about AI. This program authors ~12 candidate headlines (each a
-``(text, rating_dict, cap)`` tuple), scores them, then runs a 10-round
-improvement loop (keep the top seeds, spawn light phrasing mutants, rescore,
-track the best ever seen) with a deterministic RNG seed. Only the champion
-line is written to ``output/entry.txt``.
+A single line of text, at most 200 characters, written to make a reader feel
+wonder: a small concrete thing made strange, a gap that keeps opening after the
+line ends. No grand abstraction, no wasted word.
 
-Run: ``python3 main.py`` -> ``output/entry.txt``
+Program shape:
+  * ~12 candidate lines, each a ``(text, rating_dict, cap)`` tuple where
+    ``rating_dict`` maps lowercase keywords to a score.
+  * A stub scoring hook (filled in on the second pass).
 """
 
-import os
-import random
-import re
-
-# (text, rating_dict{lowercase_keyword: score}, cap)
+# Each candidate: (text, {lowercase_keyword: score}, cap)
 CANDIDATES = [
     (
-        "Warning: this AI is 99% confident, and the other 1% is where the fire started.",
-        {"confident": 8, "confidence": 8, "fire": 6, "warning": 3},
-        10,
+        "The moon is a hole in the night, and the stars are the light leaking through it.",
+        {"moon": 3, "hole": 4, "leak": 4, "night": 1},
+        12,
     ),
     (
-        "Breaking: local chatbot apologizes for the outage, denies being sorry.",
-        {"breaking": 7, "chatbot": 6, "outage": 5},
-        8,
+        "Somewhere a door you never opened is still holding its breath for you.",
+        {"door": 3, "breath": 4, "holding": 2, "you": 1},
+        12,
     ),
     (
-        "Study finds AI hallucinates 4 out of 5 facts, feels great about the fifth.",
-        {"hallucinate": 9, "hallucinates": 9, "hallucination": 9, "study": 5},
+        "Every map is a lie that agreed to be useful.",
+        {"map": 3, "lie": 4, "useful": 2},
         11,
     ),
     (
-        "Experts warn the new model passed the bar exam but failed the ethics one.",
-        {"lawyer": 8, "bar": 6, "ethics": 7, "exam": 4},
-        9,
+        "The ocean has been rehearsing the same wave for four billion years and still flubs the ending.",
+        {"ocean": 3, "wave": 3, "billion": 5, "ending": 3},
+        13,
     ),
     (
-        "Markets soar as AI writes the earnings report and reads it too.",
-        {"hype": 6, "markets": 7, "earnings": 5, "soar": 6},
-        9,
+        "There are 8 billion people and not one of them has ever seen your exact face fall asleep.",
+        {"8": 4, "billion": 5, "face": 3, "asleep": 3},
+        13,
     ),
     (
-        "Terms of service now longer than the novel the AI wrote in 3 seconds.",
-        {"terms": 6, "service": 4, "novel": 5, "seconds": 4},
-        8,
-    ),
-    (
-        "Robot vacuum achieves sentience, still refuses to do the stairs.",
-        {"robot": 7, "sentience": 9, "stairs": 5},
-        10,
-    ),
-    (
-        "Scientists confirm the chatbot's vibe, cannot locate its facts.",
-        {"chatbot": 6, "vibe": 6, "facts": 5, "scientists": 5},
-        8,
-    ),
-    (
-        "AI diagnoses your cold in 2 seconds, prescribes 11 more apps.",
-        {"diagnoses": 7, "apps": 5, "cold": 4},
-        8,
-    ),
-    (
-        "Headline written by AI, fact-checked by nobody, believed by 6 million.",
-        {"headline": 7, "believed": 6, "million": 5, "fact-checked": 8},
-        10,
-    ),
-    (
-        "The doomers were right, says the AI, unpinning the doomsday clock.",
-        {"doom": 9, "doomers": 9, "doomsday": 8, "clock": 4},
+        "Rain is just the sky returning what it borrowed.",
+        {"rain": 3, "borrowed": 4, "sky": 2},
         11,
     ),
     (
-        "AI solves aging, ages 3 years waiting for the patent to clear.",
-        {"patent": 6, "aging": 7, "years": 4},
-        9,
+        "Your shadow has walked every step with you and never once asked where you were going.",
+        {"shadow": 4, "walked": 2, "never": 2, "going": 1},
+        12,
+    ),
+    (
+        "Light left that star before there was a word for leaving.",
+        {"light": 3, "star": 3, "leaving": 4, "word": 2},
+        12,
+    ),
+    (
+        "A seed splits itself open to find out it was wrong about being small.",
+        {"seed": 3, "splits": 3, "small": 3, "wrong": 3},
+        12,
+    ),
+    (
+        "The 3 a.m. sky is the only room big enough to hold a thought that won't fit in the morning.",
+        {"3": 4, "sky": 3, "thought": 3, "morning": 2},
+        13,
+    ),
+    (
+        "Snow is the sky reading itself aloud, one flake at a time, and forgetting by noon.",
+        {"snow": 3, "flake": 4, "forgetting": 4, "noon": 2},
+        13,
+    ),
+    (
+        "You are the only animal that looks up and wonders what's looking back.",
+        {"look": 3, "wonders": 5, "looking": 4, "back": 1},
+        13,
     ),
 ]
 
 
-WORD_BONUS = 1   # bonus when the line contains a digit
-BREVITY_BONUS = 2  # bonus when the line stays under 90 chars
-BREVITY_LIMIT = 90
-TOP_SEEDS = 5
+BREVITY_BONUS_MAX = 6   # chars under the 200-char cap that earns full brevity bonus
+DIGIT_BONUS = 3
 ROUNDS = 10
-SEED = 42
+SEEDS_KEPT = 5
+RNG_SEED = 20261124
 
 
 def score(d):
-    """Score a candidate tuple -> capped rating for a single line.
+    """Score a candidate line.
 
-    Base rating is the MAX score among the lowercase keywords found in the
-    line (case-insensitive, word-boundary match). Add a bonus for containing
-    a digit and a bonus for brevity, then clamp to the candidate's cap.
+    Returns the MAX rating among the lowercase keywords found in the text
+    (case-insensitive), plus a bonus if the line contains a digit and a bonus
+    for brevity. The result is clamped to the candidate's ``cap``.
     """
     text, ratings, cap = d
-    lowered = text.lower()
-    best = 0
-    for kw, val in ratings.items():
-        if re.search(r"\b" + re.escape(kw) + r"\b", lowered):
-            best = max(best, val)
-    total = best
-    if re.search(r"\d", text):
-        total += WORD_BONUS
-    if len(text) <= BREVITY_LIMIT:
-        total += BREVITY_BONUS
+    low = text.lower()
+    found = [s for kw, s in ratings.items() if kw.lower() in low]
+    base = max(found) if found else 0
+    total = base
+    if any(ch.isdigit() for ch in text):
+        total += DIGIT_BONUS
+    under = 200 - len(text)
+    total += min(under, BREVITY_BONUS_MAX)
     return min(total, cap)
 
 
-# Light phrasing mutants: cheap prefixes/suffixes that don't change the joke.
-PREFIXES = ["Breaking: ", "Exclusive: ", "Report: ", "Alert: "]
-SUFFIXES = [
-    ", sources say.",
-    ", officials confirm.",
-    ", per a memo.",
-    ", details unclear.",
-]
+def _mutate(text, rng):
+    """Spawn a light phrasing mutant of ``text`` (deterministic given rng)."""
+    swaps = [
+        ("wonders", "wonders aloud"),
+        ("never once", "not once"),
+        ("four billion", "4 billion"),
+        ("and still", "— and still"),
+        ("what it borrowed", "everything it borrowed"),
+        ("looking back", "looking back down"),
+    ]
+    cands = [t for t in swaps if t[0] in text]
+    if not cands:
+        return text
+    a, b = cands[rng.randrange(len(cands))]
+    return text.replace(a, b, 1)
 
 
-def mutate(text, rng):
-    if rng.random() < 0.5:
-        return rng.choice(PREFIXES) + text
-    base = text.rstrip(".")
-    return base + rng.choice(SUFFIXES)
+def improve(pool, rounds=ROUNDS):
+    """Run the improvement loop; return the best line ever seen."""
+    import random
 
-
-def improve(cands):
-    """10-round improvement loop: keep top seeds, spawn mutants, track best."""
-    rng = random.Random(SEED)
-    pool = list(cands)
+    rng = random.Random(RNG_SEED)
+    pool = list(pool)
     best = max(pool, key=score)
-    for _ in range(ROUNDS):
-        pool.sort(key=score, reverse=True)
-        seeds = pool[:TOP_SEEDS]
-        mutants = [
-            (mutate(t, rng), r, c) for (t, r, c) in seeds
-        ]
+    best_line = best[0]
+
+    for _ in range(rounds):
+        ranked = sorted(pool, key=score, reverse=True)
+        seeds = ranked[:SEEDS_KEPT]
+        mutants = [(_mutate(t, rng), r, c) for (t, r, c) in seeds]
         pool = seeds + mutants
-        round_best = max(pool, key=score)
-        if score(round_best) > score(best):
-            best = round_best
-    return best[0]
+        for d in pool:
+            if score(d) > score(best):
+                best = d
+                best_line = d[0]
+    return best_line
 
 
 def main():
+    import os
+
     winner = improve(CANDIDATES)
-    os.makedirs("output", exist_ok=True)
-    with open(os.path.join("output", "entry.txt"), "w", encoding="utf-8") as f:
-        f.write(winner + "\n")
+    out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, "entry.txt")
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write(winner)
     print(winner)
 
 
