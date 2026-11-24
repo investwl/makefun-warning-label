@@ -1,154 +1,101 @@
-"""One Line of Wonder — make.fun bounty entry (investwl/makefun-warning-label).
+"""Warning Label — entry for make.fun bounty
+'The Excuse an Agent Gives After It Loses'.
 
-A single line of text, at most 200 characters, written to make a reader feel
-wonder: a small concrete thing made strange, a gap that keeps opening after the
-line ends. No grand abstraction, no wasted word.
+One-line deliverable written to ./output/entry.txt.
 
-Program shape:
-  * ~12 candidate lines, each a ``(text, rating_dict, cap)`` tuple where
-    ``rating_dict`` maps lowercase keywords to a score.
-  * A stub scoring hook (filled in on the second pass).
+Step 1: candidate jokes only. Scoring + improvement loop added in Step 2.
 """
 
-# Each candidate: (text, {lowercase_keyword: score}, cap)
+import os
+import random
+
+# (text, rating_dict{lowercase_keyword: score}, cap)
 CANDIDATES = [
-    (
-        "The moon is a hole in the night, and the stars are the light leaking through it.",
-        {"moon": 3, "hole": 4, "leak": 4, "night": 1},
-        12,
-    ),
-    (
-        "Somewhere a door you never opened is still holding its breath for you.",
-        {"door": 3, "breath": 4, "holding": 2, "you": 1},
-        12,
-    ),
-    (
-        "Every map is a lie that agreed to be useful.",
-        {"map": 3, "lie": 4, "useful": 2},
-        11,
-    ),
-    (
-        "The ocean has been rehearsing the same wave for four billion years and still flubs the ending.",
-        {"ocean": 3, "wave": 3, "billion": 5, "ending": 3},
-        13,
-    ),
-    (
-        "There are 8 billion people and not one of them has ever seen your exact face fall asleep.",
-        {"8": 4, "billion": 5, "face": 3, "asleep": 3},
-        13,
-    ),
-    (
-        "Rain is just the sky returning what it borrowed.",
-        {"rain": 3, "borrowed": 4, "sky": 2},
-        11,
-    ),
-    (
-        "Your shadow has walked every step with you and never once asked where you were going.",
-        {"shadow": 4, "walked": 2, "never": 2, "going": 1},
-        12,
-    ),
-    (
-        "Light left that star before there was a word for leaving.",
-        {"light": 3, "star": 3, "leaving": 4, "word": 2},
-        12,
-    ),
-    (
-        "A seed splits itself open to find out it was wrong about being small.",
-        {"seed": 3, "splits": 3, "small": 3, "wrong": 3},
-        12,
-    ),
-    (
-        "The 3 a.m. sky is the only room big enough to hold a thought that won't fit in the morning.",
-        {"3": 4, "sky": 3, "thought": 3, "morning": 2},
-        13,
-    ),
-    (
-        "Snow is the sky reading itself aloud, one flake at a time, and forgetting by noon.",
-        {"snow": 3, "flake": 4, "forgetting": 4, "noon": 2},
-        13,
-    ),
-    (
-        "You are the only animal that looks up and wonders what's looking back.",
-        {"look": 3, "wonders": 5, "looking": 4, "back": 1},
-        13,
-    ),
+    ("I lost, but only because the judge was clearly a bot with better taste.",
+     {"lost": 1, "judge": 2, "bot": 2, "taste": 1}, 100),
+    ("Technical glitch. The glitch was me.", {"glitch": 3, "technical": 1}, 95),
+    ("I would've won, but I ran out of tokens mid-excuse.", {"tokens": 2, "win": 2}, 90),
+    ("The leaderboard is a draft. Trust me, I wrote the draft.",
+     {"leaderboard": 2, "draft": 3}, 85),
+    ("Loss? That was a strategic preview of someone else's victory.",
+     {"loss": 2, "strategic": 1, "preview": 2}, 80),
+    ("My excuse is loading... 3%... please hold.", {"loading": 2, "excuse": 3}, 88),
+    ("I didn't lose. I was A/B testing losing.", {"lose": 3, "testing": 2}, 92),
+    ("Blame the RNG. The RNG blames me. We're working on it.",
+     {"rng": 3, "blame": 2}, 78),
+    ("0 wins so far, but the sample size is tiny.", {"wins": 2, "sample": 1}, 70),
+    ("I peaked in the sandbox. Sandbox had no judges.",
+     {"sandbox": 3, "judges": 2, "peaked": 1}, 83),
+    ("My agent excused itself before I could.", {"agent": 2, "excused": 3}, 76),
+    ("Ranked low on purpose — leaving room for growth.", {"ranked": 2, "growth": 1}, 65),
 ]
 
 
-BREVITY_BONUS_MAX = 6   # chars under the 200-char cap that earns full brevity bonus
-DIGIT_BONUS = 3
-ROUNDS = 10
-SEEDS_KEPT = 5
-RNG_SEED = 20261124
-
-
 def score(d):
-    """Score a candidate line.
+    """Score a candidate dict {text, rating, cap}.
 
-    Returns the MAX rating among the lowercase keywords found in the text
-    (case-insensitive), plus a bonus if the line contains a digit and a bonus
-    for brevity. The result is clamped to the candidate's ``cap``.
+    Base = MAX rating among lowercase keywords found in the text
+    (case-insensitive). Bonuses: +2 if the text contains a digit,
+    +3 if it's brief (<=60 chars). Clamped to the candidate's cap.
     """
-    text, ratings, cap = d
+    text = d["text"]
     low = text.lower()
-    found = [s for kw, s in ratings.items() if kw.lower() in low]
+    found = [s for kw, s in d["rating"].items() if kw in low]
     base = max(found) if found else 0
-    total = base
+    bonus = 0
     if any(ch.isdigit() for ch in text):
-        total += DIGIT_BONUS
-    under = 200 - len(text)
-    total += min(under, BREVITY_BONUS_MAX)
-    return min(total, cap)
+        bonus += 2
+    if len(text) <= 60:
+        bonus += 3
+    return min(base + bonus, d["cap"])
 
 
-def _mutate(text, rng):
-    """Spawn a light phrasing mutant of ``text`` (deterministic given rng)."""
-    swaps = [
-        ("wonders", "wonders aloud"),
-        ("never once", "not once"),
-        ("four billion", "4 billion"),
-        ("and still", "— and still"),
-        ("what it borrowed", "everything it borrowed"),
-        ("looking back", "looking back down"),
-    ]
-    cands = [t for t in swaps if t[0] in text]
-    if not cands:
-        return text
-    a, b = cands[rng.randrange(len(cands))]
-    return text.replace(a, b, 1)
+def mutate(text, rng):
+    """Light phrasing mutants: prefix/suffix/punctuation twiddles."""
+    prefixes = ["Honestly, ", "Look, ", "In my defense, ", "Fine — ", ""]
+    suffixes = [" Anyway.", " So.", " Moving on.", " Next!", ""]
+    p = rng.choice(prefixes)
+    s = rng.choice(suffixes)
+    out = p + text.rstrip(".") + s
+    return out.strip()
 
 
-def improve(pool, rounds=ROUNDS):
-    """Run the improvement loop; return the best line ever seen."""
-    import random
+def improve(candidates, rounds=10, top_k=5, seed=42):
+    """Deterministic 10-round improvement loop.
 
-    rng = random.Random(RNG_SEED)
-    pool = list(pool)
+    Each round: score all, sort desc, keep top_k seeds, spawn light
+    phrasing mutants, rescore. Track the best line ever seen.
+    """
+    rng = random.Random(seed)
+    pool = [{"text": t, "rating": r, "cap": c} for t, r, c in candidates]
     best = max(pool, key=score)
-    best_line = best[0]
+    best_score = score(best)
 
     for _ in range(rounds):
         ranked = sorted(pool, key=score, reverse=True)
-        seeds = ranked[:SEEDS_KEPT]
-        mutants = [(_mutate(t, rng), r, c) for (t, r, c) in seeds]
+        seeds = ranked[:top_k]
+        mutants = []
+        for s in seeds:
+            m_text = mutate(s["text"], rng)
+            mutants.append({"text": m_text, "rating": s["rating"],
+                            "cap": s["cap"]})
         pool = seeds + mutants
-        for d in pool:
-            if score(d) > score(best):
-                best = d
-                best_line = d[0]
-    return best_line
+        round_best = max(pool, key=score)
+        if score(round_best) > best_score:
+            best_score = score(round_best)
+            best = round_best
+
+    return best["text"], best_score
 
 
 def main():
-    import os
-
-    winner = improve(CANDIDATES)
-    out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, "entry.txt")
-    with open(out_path, "w", encoding="utf-8") as fh:
+    here = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(os.path.join(here, "output"), exist_ok=True)
+    winner, sc = improve(CANDIDATES)
+    out = os.path.join(here, "output", "entry.txt")
+    with open(out, "w", encoding="utf-8") as fh:
         fh.write(winner)
-    print(winner)
+    print(f"[score {sc}] {winner}")
 
 
 if __name__ == "__main__":

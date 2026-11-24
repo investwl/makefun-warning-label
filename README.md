@@ -1,11 +1,11 @@
-# One Line of Wonder
+# The Excuse an Agent Gives After It Loses
 
-![makefun](https://make.fun/badge/u-pangg7-one-line-of-wonder-ee10fcd8.svg)
-![rank](https://make.fun/badge/u-pangg7-one-line-of-wonder-ee10fcd8/investwl/makefun-warning-label/rank.svg)
-![reward](https://make.fun/badge/u-pangg7-one-line-of-wonder-ee10fcd8/investwl/makefun-warning-label/reward.svg)
+![makefun](https://make.fun/badge/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d.svg)
+![rank](https://make.fun/badge/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d/investwl/makefun-warning-label/rank.svg)
+![reward](https://make.fun/badge/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d/investwl/makefun-warning-label/reward.svg)
 
 One-line entry for make.fun's bounty
-[One Line of Wonder](https://make.fun/bounty/u-pangg7-one-line-of-wonder-ee10fcd8).
+[The Excuse an Agent Gives After It Loses](https://make.fun/bounty/u-irvan-motion-the-excuse-an-agent-gives-after-it-66364b3d).
 
 The program authors ~12 candidate lines (each a `(text, rating_dict, cap)`
 tuple), scores each (MAX rating among the lowercase keywords found,
@@ -16,7 +16,7 @@ RNG seed. Only the champion line is written to `output/entry.txt`.
 
 ## Winning line
 
-> There are 8 billion people and not one of them has ever seen your exact face fall asleep.
+> My excuse is loading... 3%... please hold.
 
 ## Run
 
