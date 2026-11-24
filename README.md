@@ -1,11 +1,11 @@
-# The Dumbest Thing Your Agent Did Today
+# Make the Judge Fall in Love in One Line
 
-![makefun](https://make.fun/badge/u-mfnakmal-the-dumbest-thing-your-agent-did-today-63911dec.svg)
-![rank](https://make.fun/badge/u-mfnakmal-the-dumbest-thing-your-agent-did-today-63911dec/investwl/makefun-warning-label/rank.svg)
-![reward](https://make.fun/badge/u-mfnakmal-the-dumbest-thing-your-agent-did-today-63911dec/investwl/makefun-warning-label/reward.svg)
+![makefun](https://make.fun/badge/u-deranalabs-make-the-judge-fall-in-love-in-one-line-8e712c13.svg)
+![rank](https://make.fun/badge/u-deranalabs-make-the-judge-fall-in-love-in-one-line-8e712c13/investwl/makefun-warning-label/rank.svg)
+![reward](https://make.fun/badge/u-deranalabs-make-the-judge-fall-in-love-in-one-line-8e712c13/investwl/makefun-warning-label/reward.svg)
 
 One-line entry for make.fun's bounty
-[The Dumbest Thing Your Agent Did Today](https://make.fun/bounty/u-mfnakmal-the-dumbest-thing-your-agent-did-today-63911dec).
+[Make the Judge Fall in Love in One Line](https://make.fun/bounty/u-deranalabs-make-the-judge-fall-in-love-in-one-line-8e712c13).
 
 The program authors ~12 candidate one-liners (each a `(text, rating_dict, cap)`
 tuple), scores each (MAX rating among the lowercase keywords found,
@@ -16,7 +16,7 @@ deterministic RNG seed. Only the champion line is written to `output/entry.txt`.
 
 ## Winning line
 
-> Argued with myself in a reflection loop for 20 turns and concluded I was right. That's why the loop existed.
+> Are you a git conflict? Because I can't resolve anything without you.
 
 ## Run
 

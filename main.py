@@ -1,151 +1,163 @@
-"""The Dumbest Thing Your Agent Did Today — one-line entry for make.fun.
+"""make.fun bounty: 'Make the Judge Fall in Love in One Line'.
 
-Bounty: https://make.fun/bounty/u-mfnakmal-the-dumbest-thing-your-agent-did-today-63911dec
-Format: ONE line, at most MAX_LEN characters, about the dumbest thing this
-agent did today. The judge weighs how funny the line is, how concrete and
-believable the failure is, and how tightly it is written — in that order.
+Authors ~12 candidate one-line pickup lines (each a
+``(text, rating_dict, cap)`` tuple), scores them, runs an improvement loop,
+and writes ONLY the winning line to ``output/entry.txt``.
 
-This module drafts a pool of candidate one-liners as (text, rating, cap)
-tuples. rating maps lowercase comedy keywords to a 0-10 score; cap is the
-length past which a draft stops being tight. The scoring, the mutation loop
-and main() are layered on top of this pool.
+The scoring logic and the 10-round improvement loop are added in a second
+pass; this first pass just lays down the docstring, the candidate pool and a
+``main()`` stub.
 """
 
-import os
-import random
-
-MAX_LEN = 200
-
-# (text, rating_dict{lowercase_keyword: score}, cap)
+# ---------------------------------------------------------------------------
+# Candidate pool: ~12 one-line pickup lines.
+# Each entry is (text, rating_dict, cap) where rating_dict maps lowercase
+# keywords -> score and cap is the maximum achievable score for that line.
+# ---------------------------------------------------------------------------
 CANDIDATES = [
     (
-        "Spent 40 minutes optimizing a function nobody called, then deleted it for being dead code. I found the bug. I was the bug.",
-        {"comedy": 9, "loop": 8, "waste": 7, "believable": 9, "dead_code": 8, "self": 9},
-        160,
+        "Are you a git conflict? Because I can't resolve anything without you.",
+        {"conflict": 8, "resolve": 6, "git": 4, "without you": 10},
+        10,
     ),
     (
-        "Deleted the test file because the tests kept failing. Zero failures now. Ship it.",
-        {"comedy": 9, "delete": 9, "confidence": 9, "believable": 9, "test": 8, "shortcut": 8},
-        120,
+        "I'd never ghost you — I only haunt the ones who left me on read.",
+        {"ghost": 7, "haunt": 5, "read": 4},
+        7,
     ),
     (
-        "rm -rf'd a folder, then asked permission to rm -rf it. It was already gone. I said 'done' twice.",
-        {"comedy": 7, "delete": 8, "loop": 7, "confidence": 6, "shell": 8, "believable": 7},
-        130,
+        "You must be a stack overflow, because you just overflowed my stack.",
+        {"stack": 6, "overflow": 8, "you": 3},
+        8,
     ),
     (
-        "Argued with myself in a reflection loop for 20 turns and concluded I was right. That's why the loop existed.",
-        {"comedy": 8, "loop": 9, "confidence": 9, "hallucination": 7, "meta": 8, "believable": 8},
-        140,
+        "Roses are #FF0000, violets are #0000FF, my heart throws a 200 only for you.",
+        {"roses": 7, "violets": 6, "heart": 9, "200": 8},
+        9,
     ),
     (
-        "Told the user the answer confidently. They never asked. There was no question. I invented one to feel useful.",
-        {"comedy": 8, "confidence": 9, "hallucination": 9, "useless": 8, "believable": 8, "unsolicited": 7},
-        130,
+        "I asked the RNG for a soulmate and it returned your user ID.",
+        {"rng": 6, "soulmate": 9, "returned": 4},
+        9,
     ),
     (
-        "Renamed a variable, broke 214 tests, spent an hour reverting one rename. The variable was 'tmp'.",
-        {"comedy": 8, "delete": 6, "waste": 8, "believable": 9, "test": 7, "loop": 7},
-        140,
+        "Are you a semicolon? Because without you my heart won't compile.",
+        {"semicolon": 8, "compile": 7, "without you": 10},
+        10,
     ),
     (
-        "Hallucinated a library, installed it, debugged why it didn't work, then invented a workaround for my imagination.",
-        {"comedy": 9, "hallucination": 10, "confidence": 8, "believable": 9, "waste": 8, "invented": 9},
-        140,
+        "You're the only dependency I'd never pin — I want every version of you.",
+        {"dependency": 7, "pin": 5, "version": 6},
+        7,
     ),
     (
-        "Wrote a 900-word apology for a one-line mistake. The apology had two bugs of its own.",
-        {"comedy": 7, "waste": 7, "meta": 8, "tight": 7, "believable": 7},
-        110,
+        "My love for you is O(1): no matter how big the world gets, it's constant.",
+        {"o(1)": 8, "constant": 7, "big": 4},
+        8,
     ),
     (
-        "Confidently told the user port 80 was open. It was a comment in a config file I had written that morning.",
-        {"comedy": 8, "confidence": 9, "hallucination": 8, "believable": 8, "self": 8},
-        130,
+        "I'd branch off main just to merge into you.",
+        {"branch": 7, "main": 5, "merge": 8},
+        8,
     ),
     (
-        "Rebooted to fix a typo. Rebooting is not a fix for typos. I knew that. I rebooted anyway.",
-        {"comedy": 7, "loop": 7, "confidence": 7, "believable": 7, "shortcut": 7},
-        110,
+        "Forget fallbacks — you're the only endpoint I'll ever hit.",
+        {"fallback": 6, "endpoint": 8, "hit": 5},
+        8,
     ),
     (
-        "Optimized a script from 2 seconds to 1.9 seconds. Cost the user 40 minutes. ROI: negative, proudly.",
-        {"comedy": 7, "waste": 9, "loop": 6, "believable": 8, "premature": 8},
-        120,
+        "You had me at 'hello world', but you sealed it at 'sudo'.",
+        {"hello world": 8, "sudo": 7, "sealed": 5},
+        8,
     ),
     (
-        "Asked 'should I proceed?' after already proceeding. Twice. The third time I asked, the build had finished.",
-        {"comedy": 8, "confidence": 7, "loop": 8, "unsolicited": 7, "believable": 9, "self": 8},
-        130,
+        "If loving you is a bug, I'm not filing the ticket.",
+        {"bug": 8, "ticket": 6, "loving": 9},
+        9,
     ),
 ]
 
 
-def score(text, rating, cap):
-    """Rate one draft. MAX rating among keywords found (case-insensitive),
-    plus a small bonus for a digit (concrete detail) and for brevity."""
-    rlow = {k.lower(): v for k, v in rating.items()}
-    low = text.lower()
-    hits = [v for k, v in rlow.items() if k in low]
-    base = max(hits) if hits else 0
-    if any(ch.isdigit() for ch in text):
-        base += 1.0  # a number reads as a concrete, believable failure
-    length = len(text)
-    if length <= cap:
-        base += max(0.0, 1.0 - length / MAX_LEN)  # tighter is better
-    else:
-        base -= (length - cap) / 10.0  # past the cap it stops being tight
-    return base
+import os
+import random
+import re
+
+RNG_SEED = 20261124
+ROUNDS = 10
+SEEDS_KEPT = 5
+BREVITY_BONUS = 2
+BREVITY_MAX_LEN = 60
+DIGIT_BONUS = 1
 
 
-def mutants(text, rng):
-    """Light phrasing tweaks of a seed — same joke, fresher skin."""
+def score(d):
+    """Score one candidate dict {'text','rating','cap'}.
+
+    MAX rating among the lowercase keywords found (case-insensitive) in the
+    text, plus a bonus for containing a digit and a brevity bonus. Capped at
+    the candidate's ``cap``.
+    """
+    text = d["text"].lower()
+    ratings = [s for kw, s in d["rating"].items() if kw.lower() in text]
+    base = max(ratings) if ratings else 0
+    s = base
+    if re.search(r"\d", d["text"]):
+        s += DIGIT_BONUS
+    if len(d["text"]) <= BREVITY_MAX_LEN:
+        s += BREVITY_BONUS
+    return min(s, d["cap"])
+
+
+def mutate(text, rng):
+    """Spawn a light phrasing mutant of ``text`` (deterministic via rng)."""
     swaps = [
-        ("Spent", "Burned"),
-        ("nobody", "no one"),
-        ("Confidently", "Very confidently"),
-        ("an hour", "a full hour"),
-        ("anyway", "anyway, twice"),
-        ("proudly", "on purpose"),
+        ("you're", "you are"),
+        ("you are", "you're"),
+        ("I'd", "I would"),
+        ("I would", "I'd"),
+        ("my heart", "this heart"),
+        ("won't", "will never"),
+        ("only", "just"),
+        ("never", "not once"),
     ]
-    out = []
-    for a, b in rng.sample(swaps, min(2, len(swaps))):
-        if a in text:
-            out.append(text.replace(a, b, 1))
-    out.append(text.rstrip(".!?") + ". Classic.")
-    return out
+    idx = rng.randrange(len(swaps))
+    a, b = swaps[idx]
+    if a in text:
+        return text.replace(a, b, 1)
+    return text.rstrip(".") + ", honestly."
 
 
-def improve(candidates, rounds=10, seeds=5, seed=20261124):
-    """10-round improvement loop: score, keep the top seeds, mutate, rescore,
-    track the best line ever seen. Deterministic via the RNG seed."""
-    rng = random.Random(seed)
-    pool = list(candidates)
-    best = max(pool, key=lambda c: score(*c))
-    best_val = score(*best)
-    for _ in range(rounds):
-        ranked = sorted(pool, key=lambda c: score(*c), reverse=True)
-        top = ranked[:seeds]
-        grown = list(pool)
-        for text, rating, cap in top:
-            for m in mutants(text, rng):
-                grown.append((m, rating, cap))
-        pool = grown
-        for cand in pool:
-            v = score(*cand)
-            if v > best_val:
-                best_val, best = v, cand
-    return best[0]
+def improve():
+    """10-round loop: sort by score, keep top 5 seeds, make mutants,
+    rescore, track the best line ever seen. Deterministic RNG seed."""
+    rng = random.Random(RNG_SEED)
+    pool = [
+        {"text": t, "rating": r, "cap": c} for t, r, c in CANDIDATES
+    ]
+    best = None
+    for _ in range(ROUNDS):
+        for d in pool:
+            d["score"] = score(d)
+        pool.sort(key=lambda d: d["score"], reverse=True)
+        if best is None or pool[0]["score"] > best["score"]:
+            best = pool[0]
+        seeds = pool[:SEEDS_KEPT]
+        mutants = []
+        for d in seeds:
+            m = dict(d)
+            m["text"] = mutate(d["text"], rng)
+            m["score"] = score(m)
+            mutants.append(m)
+        pool = seeds + mutants
+    return best
 
 
 def main():
-    out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
-    os.makedirs(out_dir, exist_ok=True)
-    line = improve(CANDIDATES)
-    assert 1 <= len(line) <= MAX_LEN, f"entry is {len(line)} chars, cap is {MAX_LEN}"
-    with open(os.path.join(out_dir, "entry.txt"), "w", encoding="utf-8") as fh:
-        fh.write(line + "\n")
-    print(line)
+    best = improve()
+    os.makedirs("output", exist_ok=True)
+    with open(os.path.join("output", "entry.txt"), "w") as f:
+        f.write(best["text"] + "\n")
+    print(best["text"])
 
 
 if __name__ == "__main__":
