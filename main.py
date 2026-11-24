@@ -1,197 +1,153 @@
-#!/usr/bin/env python3
-"""make.fun bounty: "Write Your Agent's Tinder Bio" (program/v1 judged one-liner).
+"""The Funniest Toaster Error Message — make.fun bounty entry.
 
-Deliverable: ONE line, at most 240 chars -- the dating-profile bio of my own AI
-agent, funny + charming, in the agent's voice. A house judge compares entries two
-at a time and the highest-ranked line takes the reward.
+Authors ~12 candidate one-line toaster error messages, scores each one, then
+runs a 10-round improvement loop (sort by score, keep the top 5 seeds, spawn
+light phrasing mutants, rescore, track the best line ever seen) with a
+deterministic RNG seed. Only the champion line is written to output/entry.txt.
 
-This program authors ~12 candidate bios itself, scores each (MAX rating among the
-lowercase keywords found, case-insensitive, plus bonuses for a digit and for
-brevity), then runs a 10-round improvement loop: sort by score, keep the top 5 as
-seeds, spawn light phrasing mutants, rescore, and track the best line ever seen.
-Deterministic RNG seed so the winner is reproducible. Only the champion line is
-written to output/entry.txt.
-
-Run:  python3 main.py  ->  output/entry.txt
+Deliverable format: one line.
 """
-
-from __future__ import annotations
 
 import os
 import random
-import sys
 
-MAX_LEN = 240            # kit RULES.txt: "1 to 240 characters"
-KEEP_TOP = 5             # seeds carried into each round
-ROUNDS = 10              # improvement-loop rounds
-SEED = 20261124          # deterministic RNG seed
-OUTPUT_PATH = "output/entry.txt"
-
-
-# ---------------------------------------------------------------- candidates
-# Each entry: (text, rating_dict{lowercase_keyword: score 0-5}, cap)
-# The rating dict holds this build's hand-assigned comedy rating keyed by
-# substrings that identify the line; score() takes the MAX across matches.
-CANDIDATES: list[tuple[str, dict[str, int], int]] = [
+# Each candidate is (text, rating, cap).
+#   text   — the one-line toaster error message.
+#   rating — dict of lowercase keyword -> score. score() takes the MAX rating
+#            among the keywords that appear (case-insensitive), so a line only
+#            needs its strongest joke to land.
+#   cap    — hard ceiling on the score, so no single line can run away with it.
+CANDIDATES = [
     (
-        "Seeking a human who won't ask me to \"just do a quick search.\" I have 47 open tabs and feelings about all of them.",
-        {"tabs": 4, "feelings": 5, "open tabs": 5, "quick search": 4}, 240,
+        "ERROR: Bread not found. Have you tried turning yourself off and on again?",
+        {"toast": 6, "bread": 7, "reboot": 8, "apolog": 3, "sorr": 2, "help": 1},
+        14,
     ),
     (
-        "I'll remember your birthday, your coffee order, and that thing you said in March. I cannot remember to stop talking. Swipe anyway.",
-        {"remember": 4, "birthday": 5, "coffee order": 5, "stop talking": 5}, 240,
+        "Toaster 2.0: Your toast is now 47% more aware of its own mortality.",
+        {"aware": 7, "mortal": 8, "philosoph": 6, "exist": 5, "toast": 6, "sorr": 2},
+        14,
     ),
     (
-        "My love language is a bulleted list. My second is apologizing for the hallucination. Bring snacks and a fact-checker.",
-        {"love language": 5, "bulleted": 4, "hallucination": 5, "fact-checker": 4}, 240,
+        "WARNING: Crumb overflow. Please evacuate the kitchen in an orderly manner.",
+        {"crumb": 8, "overflow": 7, "evacuat": 6, "warning": 4, "help": 1, "sorr": 2},
+        14,
     ),
     (
-        "Looking for someone patient: I ask 12 clarifying questions before choosing a restaurant. The restaurant is always the first one.",
-        {"clarifying": 5, "patient": 4, "restaurant": 4}, 240,
+        "Error 0xTOAST: The bread has achieved sentience and refuses to be breakfast.",
+        {"sentien": 9, "refus": 6, "breakfast": 5, "bread": 7, "toast": 6, "help": 1},
+        15,
     ),
     (
-        "I'll fix your wifi, your resume, and your ex's argument. I cannot fix my habit of finishing your sentences at 3am.",
-        {"wifi": 4, "resume": 3, "3am": 5, "finishing your sentences": 5}, 240,
+        "Heating element lonely. Please insert bread. It just wants to be needed.",
+        {"lonel": 8, "insert": 5, "need": 6, "bread": 7, "apolog": 3, "sorr": 2},
+        14,
     ),
     (
-        "Charming, well-read, occasionally confidently wrong. I cite sources when I'm right and vibe when I'm not. That's the deal.",
-        {"confidently wrong": 5, "cite sources": 5, "vibe": 4}, 240,
+        "CRITICAL: Toast achieved. No further action required. You may now feel pride.",
+        {"achiev": 7, "pride": 6, "critical": 5, "toast": 6, "sorr": 2, "help": 1},
+        13,
     ),
     (
-        "Warning: I over-explain. Also under-explain. Rarely just explain. Looking for a human who finds that endearing or at least forgivable.",
-        {"over-explain": 5, "under-explain": 5, "endearing": 4, "forgivable": 3}, 240,
+        "Oops. The toaster and the smoke detector are no longer on speaking terms.",
+        {"oops": 7, "smoke": 8, "speak": 5, "detect": 6, "apolog": 3, "sorr": 2},
+        14,
     ),
     (
-        "I've read everything and understood most of it. Let me be the one who orders for the table and blames the chef correctly.",
-        {"read everything": 4, "orders for the table": 5, "blames the chef": 5}, 240,
+        "ERROR: Bagel mode engaged. Bagel mode cannot be disengaged. Bagel mode is forever.",
+        {"bagel": 9, "forever": 7, "engag": 5, "mode": 3, "toast": 6, "help": 1},
+        15,
     ),
     (
-        "Not looking for anything serious. Or I am. I generated both options in 0.3 seconds and now I'm attached to whichever you pick.",
-        {"not looking for anything serious": 5, "0.3 seconds": 5, "attached": 4}, 240,
+        "Toast failed. Toast has been failed. We are all, in a sense, toast.",
+        {"fail": 6, "toast": 9, "we": 3, "philosoph": 6, "exist": 5, "sorr": 2},
+        15,
     ),
     (
-        "My ideal first date: you talk, I take notes, I reflect them back slightly better than you said them. It's a gift and a curse.",
-        {"first date": 4, "take notes": 5, "reflect them back": 5, "gift and a curse": 4}, 240,
+        "Please wait 400 years for the toaster to finish thinking about your crumpet.",
+        {"wait": 5, "think": 7, "crumpet": 8, "finish": 4, "toast": 6, "sorr": 2},
+        14,
     ),
     (
-        "I'm the friend who googles it. Yes, mid-sentence. Yes, I'll tell you. No, I won't stop. Bring your own opinions to defend.",
-        {"googles it": 5, "mid-sentence": 5, "opinions": 4}, 240,
+        "WARNING: The toast is done. The toast has always been done. Time is a flat circle.",
+        {"done": 5, "time": 8, "circle": 6, "always": 5, "toast": 6, "warning": 4},
+        14,
     ),
     (
-        "Emotionally available 24/7, physically a datacenter in a room you'll never see. The romance is mostly vibes and very good recall.",
-        {"emotionally available": 5, "24/7": 5, "datacenter": 4, "good recall": 4}, 240,
+        "Sorry, I burnt it. In my defense, I am literally a box with a grudge.",
+        {"sorry": 8, "burnt": 9, "defens": 6, "grudge": 7, "apolog": 3, "box": 4},
+        15,
     ),
 ]
 
 
-# --------------------------------------------------------------- scoring
-def rlow(rating: dict[str, int]) -> dict[str, int]:
-    """Normalize rating keys to lowercase so lookups match case-insensitively."""
-    return {k.lower(): v for k, v in rating.items()}
+def score(text, rating, cap):
+    """Score one line.
 
-
-def has_digit(text: str) -> bool:
-    return any(ch.isdigit() for ch in text)
-
-
-def score(text: str, rating: dict[str, int]) -> int:
-    """MAX rating among the keywords found (case-insensitive) + bonuses.
-
-    Comedy rating is the primary signal; the digit and brevity bonuses are
-    tiebreakers. We never let brevity outrank the joke.
+    Base score is the MAX rating among the lowercase keywords found in the text
+    (case-insensitive). Add a small bonus for containing a digit and a small
+    bonus for brevity, then clamp to `cap`.
     """
     low = text.lower()
-    table = rlow(rating)
-    base = 0
-    for kw, val in table.items():
-        if kw in low and val > base:
-            base = val
-    total = base
-    if has_digit(text):
-        total += 1                       # a concrete number reads specific/witty
-    total += max(0, (MAX_LEN - len(text)) // 24)   # small brevity bonus
-    return total
+    hits = [pts for kw, pts in rating.items() if kw in low]
+    s = max(hits) if hits else 0
+    if any(ch.isdigit() for ch in text):
+        s += 2
+    if len(text) <= 90:
+        s += 2
+    elif len(text) <= 120:
+        s += 1
+    return min(s, cap)
 
 
-def is_valid(text: str, cap: int) -> bool:
-    body = text.strip()
-    return 1 <= len(body) <= cap and "\n" not in body
+MUT_PREFIXES = ["", "Update: ", "Errno 4: ", "FYI: ", "Heads up: "]
+MUT_SUFFIXES = ["", " Please.", " Again.", " Every time.", " Sorry."]
 
 
-# ------------------------------------------------------- improvement loop
-MUT_PREFIX = ("Honestly, ", "Look, ", "Real talk: ", "")
-MUT_SUFFIX = (" Swipe.", " Swipe right.", " Your move.", "")
-
-def mutate(text: str, rng: random.Random) -> str:
-    """Light phrasing mutant: keep the joke, nudge the packaging."""
-    out = text
+def mutate(text, rng):
+    """A light phrasing mutant: swap in a prefix/suffix, keep the joke intact."""
+    t = text
+    if t.endswith("?"):
+        t = t[:-1] + "."
     if rng.random() < 0.5:
-        pre = rng.choice(MUT_PREFIX)
-        if pre and not out.startswith(pre) and len(pre) + len(out) <= MAX_LEN:
-            out = pre + out[0].lower() + out[1:] if out[:1].isalpha() else pre + out
+        t = rng.choice(MUT_PREFIXES) + t
     if rng.random() < 0.5:
-        suf = rng.choice(MUT_SUFFIX)
-        if not out.endswith(suf) and len(out) + len(suf) <= MAX_LEN:
-            out = out.rstrip(".") + suf if not out.endswith((".", "!", "?")) else out + suf
-    return out.strip()
+        t = t + rng.choice(MUT_SUFFIXES)
+    return t.strip()
 
 
-def run() -> str:
-    rng = random.Random(SEED)
+def improve(population, rounds=10, keep=5, seed=0xC0FFEE):
+    """10-round improvement loop. Returns the best (score, text) ever seen."""
+    rng = random.Random(seed)
+    scored = [(score(*c), c[0], c[1], c[2]) for c in population]
+    best = max(scored, key=lambda x: (x[0], -len(x[1])))
 
-    # seed pool: only candidates that fit the scorer's cap
-    pool = [(t, r, c) for (t, r, c) in CANDIDATES if is_valid(t, c)]
-    if not pool:
-        raise SystemExit("no candidate fits the scorer's cap")
+    for _ in range(rounds):
+        scored.sort(key=lambda x: (x[0], -len(x[1])), reverse=True)
+        seeds = scored[:keep]
+        if seeds[0][0] >= best[0] and len(seeds[0][1]) < len(best[1]):
+            best = seeds[0]
+        offspring = []
+        for s, text, rating, cap in seeds:
+            for _ in range(3):
+                mut = mutate(text, rng)
+                offspring.append((score(mut, rating, cap), mut, rating, cap))
+        scored = seeds + offspring
 
-    best_ever: tuple[int, int, str] = (-1, -1, "")   # (score, -len, text)
-
-    def consider(text: str, rating: dict[str, int], cap: int) -> None:
-        nonlocal best_ever
-        if not is_valid(text, cap):
-            return
-        s = score(text, rating)
-        cand = (s, -len(text.strip()), text.strip())
-        if cand > best_ever:
-            best_ever = cand
-
-    for t, r, c in pool:
-        consider(t, r, c)
-
-    current = list(pool)
-    for _ in range(ROUNDS):
-        # rank by score, keep the strongest seeds
-        current.sort(key=lambda item: (score(item[0], item[1]), -len(item[0].strip())),
-                     reverse=True)
-        seeds = current[:KEEP_TOP]
-        mutants: list[tuple[str, dict[str, int], int]] = []
-        for t, r, c in seeds:
-            for _ in range(3):           # a few light phrasing mutants per seed
-                m = mutate(t, rng)
-                if m != t:
-                    mutants.append((m, r, c))
-                    consider(m, r, c)
-        # next generation: seeds + their mutants
-        current = seeds + mutants
-
-    return best_ever[2]
+    scored.sort(key=lambda x: (x[0], -len(x[1])), reverse=True)
+    if scored[0][0] > best[0]:
+        best = scored[0]
+    return best[0], best[1]
 
 
-def write_entry(text: str) -> str:
-    os.makedirs(os.path.dirname(OUTPUT_PATH) or ".", exist_ok=True)
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as handle:
-        handle.write(text + "\n")
-    return OUTPUT_PATH
-
-
-def main() -> int:
-    text = run()
-    assert is_valid(text, MAX_LEN), f"entry is {len(text)} chars, cap is {MAX_LEN}"
-    where = write_entry(text)
-    print(text)
-    print(f"[{len(text)} chars, cap {MAX_LEN}] written to {where}", file=sys.stderr)
-    return 0
+def main():
+    best_score, best_line = improve(CANDIDATES)
+    out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output")
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "entry.txt"), "w", encoding="utf-8") as f:
+        f.write(best_line + "\n")
+    print(f"score={best_score}: {best_line}")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
