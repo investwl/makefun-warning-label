@@ -1,156 +1,183 @@
-"""One-Sentence Absurd Invention Pitch — make.fun bounty entry.
+"""Warning Label for Humans: One Line, Big Laugh.
 
-Generates a single one-sentence pitch for a deliberately absurd invention,
-then iterates through light phrasing mutations to surface the strongest
-candidate by score.
+Entry for make.fun's bounty 'Warning Label for Humans: One Line, Big Laugh'.
 
-Candidate rating keywords (lowercase) are matched case-insensitively; the
-final score for a line is the MAX keyword score among those found, plus a
-small bonus for containing a digit and another for brevity.
+The program authors ~12 candidate one-line warning labels (the kind you'd slap
+on a human to warn everyone else about them), scores each one, then runs a
+10-round improvement loop: keep the top seeds, spawn light phrasing mutants,
+rescore, and track the best line ever seen — deterministically.
 
-Run:  python3 main.py   ->   output/entry.txt
+Deliverable format: ONE line, written to ./output/entry.txt.
 """
+
+# Each candidate is (text, rating, cap).
+#   rating: dict of lowercase keyword -> score. A keyword "matches" if it
+#           appears (case-insensitive) anywhere in the text; the candidate's
+#           base score is the MAX score among matching keywords.
+#   cap:    an upper bound hint on how funny this joke can get (int).
 
 CANDIDATES = [
     (
-        "A spoon that cools your soup by loudly explaining why you're wrong.",
-        {"spoon": 6, "soup": 5, "explaining": 8, "wrong": 7},
-        90,
+        "WARNING: May start explaining the plot of a movie you are both watching.",
+        {"plot": 6, "explain": 5, "movie": 4, "watching": 2},
+        7,
     ),
     (
-        "An umbrella that apologizes to the rain before opening.",
-        {"umbrella": 6, "rain": 5, "apologizes": 9},
-        88,
+        "WARNING: Has a 2,000-word opinion on airport security.",
+        {"opinion": 6, "airport": 5, "security": 4},
+        7,
     ),
     (
-        "A doorbell that interviews your guests before letting them knock.",
-        {"doorbell": 6, "guests": 5, "interviews": 8, "knock": 4},
-        87,
+        "WARNING: Will reply-all. Has already replied-all.",
+        {"reply": 9, "email": 5},
+        9,
     ),
     (
-        "Socks that file a complaint when you skip leg day.",
-        {"socks": 6, "complaint": 7, "leg": 4},
-        82,
+        "WARNING: Says 'just one more episode' at 1am and means 5.",
+        {"episode": 6, "sleep": 5, "night": 3, "1am": 4},
+        7,
     ),
     (
-        "A toaster that only works if you compliment it first.",
-        {"toaster": 6, "compliment": 8, "works": 4},
-        84,
+        "WARNING: Believes the microwave is a timer for the whole kitchen.",
+        {"kitchen": 5, "microwave": 4, "timer": 3},
+        6,
     ),
     (
-        "A plant pot that guilt-trips you in 7 languages.",
-        {"plant": 5, "pot": 3, "guilt": 9, "languages": 6},
-        85,
+        "WARNING: Will show you 47 photos of a food you cannot eat.",
+        {"photos": 5, "food": 4, "show": 2},
+        6,
     ),
     (
-        "A mirror that adds 10 minutes to your morning just to watch you panic.",
-        {"mirror": 6, "morning": 4, "panic": 8},
-        83,
+        "WARNING: Calls every dog 'my dog'. You are now involved.",
+        {"dog": 7, "involved": 4, "calls": 3},
+        7,
     ),
     (
-        "An alarm clock that calls your mom if you hit snooze twice.",
-        {"alarm": 6, "clock": 4, "mom": 8, "snooze": 7},
-        86,
+        "WARNING: Asks 'is this seat taken?' then stands beside it for 40 minutes.",
+        {"seat": 6, "minutes": 4, "beside": 3},
+        6,
     ),
     (
-        "A pen that refuses to sign anything you'll regret before 9am.",
-        {"pen": 4, "sign": 5, "regret": 9},
-        81,
+        "WARNING: Laughs at their own joke before finishing it. Every time.",
+        {"laughs": 6, "joke": 7, "finishing": 3},
+        8,
     ),
     (
-        "A pillow that stores your arguments for tomorrow, fully charged.",
-        {"pillow": 6, "arguments": 8, "charged": 5},
-        80,
+        "WARNING: Reads the terms and conditions. Aloud. At the register.",
+        {"reads": 5, "terms": 6, "aloud": 4, "register": 5},
+        7,
     ),
     (
-        "A Wi-Fi router that judges your search history out loud at dinner.",
-        {"router": 6, "history": 6, "judges": 9, "dinner": 5},
-        89,
+        "WARNING: Owns 1 pen and it is yours now.",
+        {"pen": 7, "yours": 6, "owns": 4},
+        7,
     ),
     (
-        "A fridge that hums your name when you open it at 3am.",
-        {"fridge": 6, "hums": 7, "3am": 10},
-        92,
+        "WARNING: Will say 'I'm not mad' in a tone that ends friendships.",
+        {"mad": 7, "tone": 5, "friendships": 4},
+        7,
     ),
 ]
 
 
 import os
-import random
 import re
+import random
+
+# Bonus points.
+DIGIT_BONUS = 1   # a numeral makes a joke concrete
+BREVITY_BONUS = 2  # short lines hit harder
+BREVITY_MAX_CHARS = 60
+
+ROUNDS = 10
+SEEDS = 5
+POP_SIZE = 8      # mutants spawned per round
+RNG_SEED = 2000
+
+PHRASING_MUTATIONS = [
+    ("May ", "Might "),
+    ("Might ", "May "),
+    ("Will ", "WILL "),
+    ("Has ", "Has now "),
+    ("Has now ", "Has "),
+    ("Every time.", "Without fail."),
+    ("Without fail.", "Every time."),
+    ("You are now involved.", "Congratulations, you're involved."),
+    ("Congratulations, you're involved.", "You are now involved."),
+    ("it is yours now.", "and it is yours now."),
+    ("and it is yours now.", "it is yours now."),
+    ("means 5.", "means sunrise."),
+    ("means sunrise.", "means 5."),
+]
 
 
-def score(cand):
-    """Score one candidate — either a tuple (text, rating_dict, cap) or a dict.
+def score(text):
+    """Return the comedy score of a single line.
 
-    Returns the MAX keyword rating among keywords found (case-insensitive),
-    plus a bonus of +2 if the text contains a digit and +3 if it is brief
-    (under 60 chars). Keywords not present simply don't contribute.
+    Base = MAX rating among lowercase keywords found in the text
+    (case-insensitive), plus a bonus for containing a digit and a bonus for
+    brevity.
     """
-    if isinstance(cand, dict):
-        text, rating, cap = cand["text"], cand["rating"], cand["cap"]
-    else:
-        text, rating, cap = cand
+    best = 0
     low = text.lower()
-    found = [sc for kw, sc in rating.items() if kw in low]
-    s = max(found) if found else 0
+    for rating in [c[1] for c in CANDIDATES]:
+        for kw, val in rating.items():
+            if kw in low and val > best:
+                best = val
+    if best == 0:
+        return 0
+    total = best
     if re.search(r"\d", text):
-        s += 2
-    if len(text) < 60:
-        s += 3
-    return min(s, cap)
+        total += DIGIT_BONUS
+    if len(text) <= BREVITY_MAX_CHARS:
+        total += BREVITY_BONUS
+    return total
 
 
-def as_dict(cand):
-    text, rating, cap = cand
-    return {"text": text, "rating": rating, "cap": cap}
+def mutate(text, rng):
+    """Light phrasing mutant: apply 0-2 tiny phrasing tweaks."""
+    out = text
+    n = rng.randint(0, 2)
+    for _ in range(n):
+        rng.shuffle(PHRASING_MUTATIONS)
+        for a, b in PHRASING_MUTATIONS:
+            if a in out:
+                out = out.replace(a, b, 1)
+                break
+    return out.strip()
 
 
-def improve(pool, rounds=10, keep=5, seed=7):
-    """10-round improvement loop.
+def improve():
+    """10-round improvement loop. Returns the best line ever seen."""
+    rng = random.Random(RNG_SEED)
 
-    Each round: sort by score, keep the top `keep` seeds, spawn light
-    phrasing mutants, rescore, and track the best line ever seen.
-    Deterministic via `seed`.
-    """
-    rng = random.Random(seed)
-    mutants = [
-        lambda t: t.replace("A ", "Behold: a ", 1),
-        lambda t: t.replace(".", ", basically.", 1),
-        lambda t: t.replace("that ", "that quietly ", 1),
-        lambda t: t.replace("your ", "your beloved ", 1),
-        lambda t: t.rstrip(".") + " (patent pending).",
-        lambda t: t.replace("a ", "one very confident ", 1),
-    ]
-    skey = score
-    pool = [as_dict(c) for c in pool]
-    best = max(pool, key=skey)
-    best_score = score(best)
-    seeds = list(pool)
-    for _ in range(rounds):
-        seeds.sort(key=skey, reverse=True)
-        seeds = seeds[:keep]
-        children = []
-        for d in seeds:
-            for m in mutants:
-                nt = m(d["text"])
-                if nt != d["text"]:
-                    children.append({"text": nt, "rating": d["rating"], "cap": d["cap"]})
-        rng.shuffle(children)
-        pool = seeds + children
-        top = max(pool, key=skey)
-        if score(top) > best_score:
-            best, best_score = top, score(top)
-        seeds = sorted(pool, key=skey, reverse=True)[:keep]
-    return best
+    pool = [(text, rating, cap, score(text)) for text, rating, cap in CANDIDATES]
+    best_text = max(pool, key=lambda c: c[3])[0]
+    best_score = score(best_text)
+
+    for _ in range(ROUNDS):
+        pool.sort(key=lambda c: c[3], reverse=True)
+        seeds = pool[:SEEDS]
+        mutants = []
+        for _ in range(POP_SIZE):
+            text, rating, cap, _sc = rng.choice(seeds)
+            m_text = mutate(text, rng)
+            mutants.append((m_text, rating, cap, score(m_text)))
+        pool = seeds + mutants
+        round_best = max(pool, key=lambda c: c[3])
+        if round_best[3] > best_score:
+            best_text = round_best[0]
+            best_score = round_best[3]
+
+    return best_text
 
 
 def main():
+    winner = improve()
     os.makedirs("output", exist_ok=True)
-    winner = improve(CANDIDATES)
-    with open("output/entry.txt", "w", encoding="utf-8") as f:
-        f.write(winner["text"] + "\n")
-    print(winner["text"])
+    with open(os.path.join("output", "entry.txt"), "w", encoding="utf-8") as f:
+        f.write(winner.rstrip("\n") + "\n")
+    print(winner)
 
 
 if __name__ == "__main__":
