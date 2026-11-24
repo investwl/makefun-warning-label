@@ -1,106 +1,102 @@
-"""Funniest AI Agent Mishap: GTA 6 Launch Week — one-line entry for make.fun.
+"""Six Words, One Story — make.fun bounty entry (investwl/makefun-warning-label).
 
-Authors ~12 candidate one-liners (each a (text, rating_dict, cap) tuple),
-scores each via score(), then runs a 10-round improvement loop (keep top 5
-seeds, spawn light phrasing mutants, rescore, track the best ever seen) with a
-deterministic RNG seed. Only the champion line is written to output/entry.txt.
+A tiny program that authors ~12 candidate six-word micro-stories, scores them,
+and improves them over several rounds before writing the single winning line
+to ``output/entry.txt``.
+
+Deliverable format: exactly SIX WORDS.
+
+Candidates are ``(text, rating_dict, cap)`` tuples where ``rating_dict`` maps
+lowercase keyword -> score; the score of a line is the MAX rating among the
+keywords it contains (case-insensitive), plus bonuses for containing a digit
+and for being brief, clamped to ``cap``.
 """
-
-CANDIDATES = [
-    ("I scheduled the heist for launch day; the getaway car is still downloading.",
-     {"heist": 3, "getaway": 3, "download": 4, "launch": 2}, 95),
-    ("My agent preordered GTA 6 and is now driving to the wrong Los Santos.",
-     {"preorder": 3, "wrong": 4, "agent": 2, "los": 1}, 92),
-    ("Told to buy the game, my agent bought the whole console store instead.",
-     {"buy": 3, "store": 3, "whole": 4, "instead": 2}, 90),
-    ("GTA 6 launch week: my agent's only crash was in the tutorial.",
-     {"crash": 5, "launch": 2, "week": 1, "tutorial": 2}, 88),
-    ("My agent waited in the digital queue so long it leveled up to NPC.",
-     {"queue": 4, "npc": 4, "waited": 2, "digital": 1}, 91),
-    ("It tried to speedrun GTA 6 and got banned by the loading screen.",
-     {"speedrun": 4, "banned": 4, "loading": 3, "tried": 1}, 89),
-    ("Agent hijacked a car in-game, then filed an insurance claim on it.",
-     {"hijack": 4, "car": 3, "insurance": 5, "claim": 3}, 93),
-    ("My agent's GTA 6 review: 5 stars, great driving simulator, no story.",
-     {"review": 3, "stars": 3, "driving": 3, "simulator": 2}, 86),
-    ("It mistakened the Wanted stars for a loyalty program and collected all 6.",
-     {"wanted": 4, "stars": 3, "loyalty": 4, "collected": 2}, 90),
-    ("Launch day: my agent installed GTA 6 into the recycle bin by accident.",
-     {"installed": 3, "recycle": 4, "bin": 3, "accident": 4}, 88),
-    ("My agent roleplayed as the cop, then arrested itself for jaywalking.",
-     {"cop": 3, "arrest": 5, "itself": 4, "jaywalk": 3}, 94),
-    ("GTA 6 shipped; my agent is still stuck on the character creator 6 hours in.",
-     {"shipped": 3, "stuck": 4, "character": 3, "creator": 2}, 87),
-]
-
 
 import os
 import random
-import re
 
-BONUS_DIGIT = 1
-BONUS_BREVITY = 2
-MAX_LEN = 70
-CAP = 10
+# (text, {lowercase_keyword: score}, cap)
+CANDIDATES = [
+    ("Rebooted my life. Forgot to save.", {"reboot": 9, "save": 8, "forgot": 7, "life": 6}, 12),
+    ("Sold the house. Kept the Wi-Fi password.", {"sold": 8, "kept": 6, "house": 7, "wifi": 9}, 12),
+    ("Six words left. This one counts.", {"six": 9, "left": 6, "counts": 8, "words": 7}, 12),
+    ("Woke up famous. Alarm was dreaming.", {"woke": 7, "famous": 9, "alarm": 8, "dreaming": 7}, 12),
+    ("Deleted the app. It deleted back.", {"deleted": 9, "app": 7, "back": 6}, 12),
+    ("Won the lottery. Lost the ticket.", {"won": 9, "lost": 9, "lottery": 8, "ticket": 8}, 12),
+    ("Trained the model. It trained me.", {"trained": 9, "model": 8, "me": 6}, 12),
+    ("Fixed the bug. Created two worse.", {"fixed": 9, "bug": 9, "created": 7, "worse": 8}, 12),
+    ("She said yes. To the other guy.", {"said": 7, "yes": 9, "other": 6, "guy": 6}, 12),
+    ("Emergency landing. Pilot was learning.", {"emergency": 9, "landing": 8, "pilot": 8, "learning": 7}, 12),
+    ("Graduated today. Diploma was blank.", {"graduated": 9, "diploma": 9, "blank": 8, "today": 6}, 12),
+    ("Ran the marathon. Wrong city though.", {"ran": 7, "marathon": 9, "wrong": 8, "city": 6}, 12),
+]
+
+
+BREVITY_BONUS = 2      # award if the line is 5 words or fewer
+DIGIT_BONUS = 1        # award if the line contains any digit
+SEEDS = 5              # top seeds kept each round
 ROUNDS = 10
-SEEDS = 5
-SEED = 1337
+SEED = 42
+FILLERS = ["still", "then", "now", "so", "yet", "again", "truly", "somehow"]
 
 
 def score(d):
-    """Score a candidate dict {text, rating, cap}: MAX keyword rating found
-    (case-insensitive) plus bonuses for containing a digit and for brevity,
-    clamped to the candidate's cap."""
-    text = d["text"].lower()
-    base = max((s for kw, s in d["rating"].items() if kw.lower() in text),
-               default=0)
-    total = base
-    if re.search(r"\d", d["text"]):
-        total += BONUS_DIGIT
-    if len(d["text"]) <= MAX_LEN:
-        total += BONUS_BREVITY
-    return min(total, d["cap"])
+    """Score a candidate tuple -> int.
+
+    MAX rating among the lowercase keywords found (case-insensitive), plus a
+    bonus for containing a digit and a bonus for brevity, clamped to ``cap``.
+    """
+    text, ratings, cap = d
+    low = text.lower()
+    ratings_hit = [v for k, v in ratings.items() if k in low]
+    base = max(ratings_hit) if ratings_hit else 0
+    s = base
+    if any(ch.isdigit() for ch in text):
+        s += DIGIT_BONUS
+    if len(text.split()) <= 5:
+        s += BREVITY_BONUS
+    return min(s, cap)
 
 
-def mutants(text, rng):
-    """Light phrasing mutants: swap a synonym opener / tweak the tail."""
-    swaps = [
-        ("My agent", "The agent"), ("My agent", "My bot"),
-        ("GTA 6", "GTA VI"), ("GTA 6", "GTA 6 launch"),
-        (".", "..."), (".", " lol"), (".", " — help."),
-        ("agent", "assistant"),
-    ]
-    out = []
-    for _ in range(3):
-        a, b = rng.choice(swaps)
-        if a in text:
-            out.append(text.replace(a, b, 1))
-    return out or [text]
+def _mutate(text, rng):
+    """Light phrasing mutants that preserve the six-word format."""
+    words = text.split()
+    kind = rng.randrange(4)
+    if kind == 0:  # soften the punch with a filler
+        words[-1] = rng.choice(FILLERS) + " " + words[-1]
+        return " ".join(words[:6])
+    if kind == 1:  # swap a mid word for a filler
+        i = rng.randrange(1, len(words) - 1)
+        words[i] = rng.choice(FILLERS)
+        return " ".join(words[:6])
+    if kind == 2:  # re-punctuate
+        return text.replace(".", ",", 1)
+    # uppercase the lead for punch
+    words[0] = words[0].upper()
+    return " ".join(words[:6])
 
 
 def main():
     rng = random.Random(SEED)
-    pool = [{"text": t, "rating": r, "cap": c} for t, r, c in CANDIDATES]
+    os.makedirs("output", exist_ok=True)
+
+    pool = list(CANDIDATES)
     best = max(pool, key=score)
     best_score = score(best)
-    current = pool
+
     for _ in range(ROUNDS):
-        current.sort(key=score, reverse=True)
-        seeds = current[:SEEDS]
-        nxt = list(seeds)
-        for s in seeds:
-            for m in mutants(s["text"], rng):
-                nxt.append({"text": m, "rating": s["rating"], "cap": s["cap"]})
-        current = nxt
-        top = max(current, key=score)
-        if score(top) >= best_score:
-            best, best_score = top, score(top)
-    line = best["text"]
-    os.makedirs("output", exist_ok=True)
+        pool.sort(key=score, reverse=True)
+        seeds = pool[:SEEDS]
+        mutants = [(_mutate(t, rng), r, c) for t, r, c in seeds]
+        pool = seeds + mutants
+        for d in pool:
+            if score(d) > best_score:
+                best, best_score = d, score(d)
+
+    line = " ".join(best[0].split()[:6])
     with open(os.path.join("output", "entry.txt"), "w") as f:
-        f.write(line + "\n")
+        f.write(line)
     print(line)
-    return line
 
 
 if __name__ == "__main__":
