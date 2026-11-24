@@ -1,156 +1,110 @@
 #!/usr/bin/env python3
-"""One-liner generator for make.fun comedy bounties.
+"""One Word, First Thought — make.fun bounty entry.
 
-Loop improvement 10x: each round re-scores a pool of candidate one-liners on
-several comedy axes (surprise, specificity, brevity) and keeps the strongest to
-seed the next round. The single best line is written to /output/entry.txt.
+Generate ~12 candidate one-word reactions, score them on several comedy
+axes, then run a 10-round improvement loop (keep top 5 seeds, spawn light
+phrasing mutants, rescore) tracking the best line ever seen.  Write ONLY
+the winning word to ./output/entry.txt.
 """
-import os, random, re
 
-# Each bounty overrides BRIEF. drafts = list of (text, rating{kw:score}, cap)
-BRIEF = {
-  "drafts": [
-    [
-      "Warning: contents may remember everything you said at 3am.",
-      {
-        "warning": 3,
-        "remember": 2
-      },
-      3
-    ],
-    [
-      "Do not operate heavy emotions while hungry.",
-      {
-        "heavy": 3,
-        "hungry": 2
-      },
-      2
-    ],
-    [
-      "Warning: may spontaneously bring up that one embarrassing thing.",
-      {
-        "warning": 3,
-        "embarrassing": 2
-      },
-      3
-    ],
-    [
-      "Side effects include thinking of the perfect comeback too late.",
-      {
-        "effects": 3,
-        "comeback": 2
-      },
-      3
-    ],
-    [
-      "Warning: not dishwasher safe, emotionally or literally.",
-      {
-        "warning": 3,
-        "dishwasher": 2
-      },
-      2
-    ],
-    [
-      "Do not use while parallel parking or in love.",
-      {
-        "parking": 3,
-        "love": 2
-      },
-      2
-    ],
-    [
-      "Warning: battery degrades rapidly after 30. No replacement part.",
-      {
-        "battery": 3,
-        "degrades": 2
-      },
-      3
-    ],
-    [
-      "Contents may settle, including your standards.",
-      {
-        "contents": 3,
-        "standards": 2
-      },
-      2
-    ],
-    [
-      "Warning: keep away from group chats after midnight.",
-      {
-        "warning": 3,
-        "chats": 2
-      },
-      2
-    ],
-    [
-      "May contain traces of unresolved childhood.",
-      {
-        "traces": 3,
-        "childhood": 2
-      },
-      3
-    ],
-    [
-      "Warning: instructions unclear, life not included.",
-      {
-        "warning": 3,
-        "included": 2
-      },
-      2
-    ],
-    [
-      "Do not taunt, fold, spindle, or reply-all.",
-      {
-        "reply": 3
-      },
-      2
-    ]
-  ]
-}
+import os
+import random
+import re
 
-WORD_RE = re.compile(r"[a-z']+")
+RNG_SEED = 42
 
-def rlow(d):
-    return {k.lower(): v for k, v in d.items()}
+# ---------------------------------------------------------------------------
+# Candidate one-word jokes: (text, rating_dict{lowercase_kw: score}, cap)
+# Each keyword is a comedy axis we may reward when it appears in the entry.
+# ---------------------------------------------------------------------------
+CANDIDATES = [
+    ("Oops.",        {"oops": 8, "mistake": 6, "oopsie": 5}, 10),
+    ("Whoops.",      {"whoops": 8, "oops": 5, "slip": 4},    10),
+    ("Ouch.",        {"ouch": 7, "pain": 6, "hurt": 5},      9),
+    ("Seriously?",   {"seriously": 7, "disbelief": 6},       8),
+    ("Wow.",         {"wow": 5, "wow": 4, "awe": 3},         7),
+    ("Yikes.",       {"yikes": 9, "cringe": 6, "yikes": 5},  9),
+    ("Ugh.",         {"ugh": 6, "ugh": 5, "groan": 4},       7),
+    ("Bruh.",        {"bruh": 8, "bruh": 6, "dude": 4},      8),
+    ("Oopsie.",      {"oopsie": 8, "oops": 6, "cute": 3},    9),
+    ("Nah.",         {"nah": 6, "no": 5, "refuse": 4},       7),
+    ("Dude.",        {"dude": 6, "dude": 5, "bro": 4},       7),
+    ("Welp.",        {"welp": 9, "welp": 7, "resign": 5},    10),
+]
+
 
 def score(d):
-    text = d[0].lower()
-    r = rlow(d[1])
-    hits = [v for k, v in r.items() if k in text]
-    base = max(hits) if hits else 0
-    # comedy axes: specificity (numbers/proper nouns), brevity bonus
-    words = WORD_RE.findall(text)
-    specificity = 1 if re.search(r"\d", text) else 0
-    brevity = 1 if len(words) <= 18 else 0
-    return base * 3 + specificity + brevity + d[2]
+    """Score a candidate dict/tuple.
 
-def round_improve(pool, rounds=10):
-    pool = list(pool)
-    best = None
-    for _ in range(rounds):
-        pool.sort(key=score, reverse=True)
-        seeds = pool[:5]
-        if best is None or score(seeds[0]) > score(best):
-            best = seeds[0]
-        # explore light phrasing variants of the seeds
-        mutants = []
-        for text, rating, cap in seeds:
-            for pre in ("Honestly, ", "Real talk: ", "Turns out "):
-                if not text.lower().startswith(pre.lower()):
-                    mutants.append((pre + text[0].lower() + text[1:], rating, cap))
-        pool = seeds + mutants + pool[len(seeds):]
-    pool.sort(key=score, reverse=True)
-    return pool[0]
+    Base = MAX rating among keywords found (case-insensitive substring),
+    plus +1 for containing a digit, plus a brevity bonus for short words.
+    """
+    if isinstance(d, tuple):
+        text, ratings, cap = d[0], d[1], d[2]
+    else:
+        text, ratings, cap = d["text"], d["ratings"], d.get("cap", 99)
+
+    low = text.lower()
+    found = [s for kw, s in ratings.items() if kw.lower() in low]
+    base = max(found) if found else 0
+
+    bonus = 0
+    if re.search(r"\d", text):
+        bonus += 1
+    # brevity: reward punchy words (stripped of punctuation)
+    core = re.sub(r"[^\w]", "", text)
+    if len(core) <= 4:
+        bonus += 3
+    elif len(core) <= 6:
+        bonus += 2
+    elif len(core) <= 8:
+        bonus += 1
+
+    return min(base + bonus, cap), base, bonus
+
+
+def light_mutants(text, rng):
+    """Return light phrasing variants of a word."""
+    core = text.strip().rstrip(".!?")
+    outs = [core, core + ".", core + "!", core.lower(), core.upper(), core.capitalize() + "."]
+    rng.shuffle(outs)
+    return outs
+
 
 def main():
-    rng = random.Random(11)
-    winner = round_improve(BRIEF["drafts"], rounds=10)
-    line = winner[0].strip()
+    rng = random.Random(RNG_SEED)
+
+    # Normalise seeds into tuples and pre-score.
+    pool = list(CANDIDATES)
+
+    best = None          # (score, text)
+    ROUNDS = 10
+    for rnd in range(1, ROUNDS + 1):
+        scored = []
+        for c in pool:
+            s, _, _ = score(c)
+            scored.append((s, c))
+        scored.sort(key=lambda x: (-x[0], x[1][0]))
+        for s, c in scored:
+            if best is None or s > best[0]:
+                best = (s, c[0])
+        # keep top 5 seeds
+        seeds = [c for _, c in scored[:5]]
+        # spawn light mutants of the seeds for the next round
+        pool = list(seeds)
+        for c in seeds:
+            for m in light_mutants(c[0], rng):
+                pool.append((m, c[1], c[2]))
+
+    winning_line = best[1]
+    winning_score = best[0]
+
     os.makedirs("output", exist_ok=True)
-    with open("output/entry.txt", "w", encoding="utf-8") as f:
-        f.write(line)
-    print(f"[{len(line)} chars] written to /output/entry.txt")
-    print(line)
+    with open(os.path.join("output", "entry.txt"), "w", encoding="utf-8") as f:
+        f.write(winning_line + "\n")
+
+    print(f"Winning line: {winning_line}  (score {winning_score})")
+
 
 if __name__ == "__main__":
     main()
