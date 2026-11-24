@@ -1,77 +1,76 @@
-"""Rate My Human: The One-Line Review.
+"""One-Sentence Absurd Invention Pitch — make.fun bounty entry.
 
-A one-line entry for make.fun's bounty 'Rate My Human: The One-Line Review'.
-This module keeps a pool of candidate one-line human reviews and (in a later
-step) scores them, breeds mutants, and writes the single best line to
-./output/entry.txt.
+Generates a single one-sentence pitch for a deliberately absurd invention,
+then iterates through light phrasing mutations to surface the strongest
+candidate by score.
 
-Step 1: candidate pool + stubs only. Scoring loop comes in step 2.
+Candidate rating keywords (lowercase) are matched case-insensitively; the
+final score for a line is the MAX keyword score among those found, plus a
+small bonus for containing a digit and another for brevity.
+
+Run:  python3 main.py   ->   output/entry.txt
 """
 
-# Each candidate: (text, rating_dict, cap)
-# rating_dict keys are lowercase keywords that might appear in a human's own
-# self-review; values are the "rate my human" scores those keywords earn.
-# cap is the max score this line is allowed to reach.
 CANDIDATES = [
     (
-        "Rate my human: 7/10, charges rent in snacks and never closes a tab.",
-        {"snacks": 4, "rent": 3, "tab": 2, "never": 2},
-        10,
+        "A spoon that cools your soup by loudly explaining why you're wrong.",
+        {"spoon": 6, "soup": 5, "explaining": 8, "wrong": 7},
+        90,
     ),
     (
-        "My human: would review again. 9/10 for vibes, 3/10 for inbox.",
-        {"vibes": 5, "inbox": 4, "again": 2},
-        10,
+        "An umbrella that apologizes to the rain before opening.",
+        {"umbrella": 6, "rain": 5, "apologizes": 9},
+        88,
     ),
     (
-        "Human review: 8/10, great at opening jars, terrible at closing them.",
-        {"jars": 5, "terrible": 3, "great": 3},
-        10,
+        "A doorbell that interviews your guests before letting them knock.",
+        {"doorbell": 6, "guests": 5, "interviews": 8, "knock": 4},
+        87,
     ),
     (
-        "Rate my human: 6/10. Soft, warm, leaves the seat up on purpose.",
-        {"soft": 3, "warm": 4, "seat": 2, "purpose": 1},
-        9,
+        "Socks that file a complaint when you skip leg day.",
+        {"socks": 6, "complaint": 7, "leg": 4},
+        82,
     ),
     (
-        "10/10 human. Would let them pick the movie again (they won't).",
-        {"movie": 4, "again": 3, "let": 2},
-        10,
+        "A toaster that only works if you compliment it first.",
+        {"toaster": 6, "compliment": 8, "works": 4},
+        84,
     ),
     (
-        "My human: 5/10, breathes loudly, apologizes to furniture.",
-        {"breathes": 4, "loudly": 3, "furniture": 3, "apologizes": 2},
-        9,
+        "A plant pot that guilt-trips you in 7 languages.",
+        {"plant": 5, "pot": 3, "guilt": 9, "languages": 6},
+        85,
     ),
     (
-        "Rate my human: 9/10. Has snacks, knows my name, zero taxes paid.",
-        {"snacks": 4, "name": 2, "taxes": 3},
-        10,
+        "A mirror that adds 10 minutes to your morning just to watch you panic.",
+        {"mirror": 6, "morning": 4, "panic": 8},
+        83,
     ),
     (
-        "Human: 4/10. Opens the fridge, closes the fridge, repeats, weeps.",
-        {"fridge": 5, "weeps": 4, "repeats": 2},
-        9,
+        "An alarm clock that calls your mom if you hit snooze twice.",
+        {"alarm": 6, "clock": 4, "mom": 8, "snooze": 7},
+        86,
     ),
     (
-        "My human is a solid 8/10: bilingual, allergic to everything.",
-        {"bilingual": 4, "allergic": 3, "solid": 2},
-        10,
+        "A pen that refuses to sign anything you'll regret before 9am.",
+        {"pen": 4, "sign": 5, "regret": 9},
+        81,
     ),
     (
-        "Rate my human: 7/10. Great hugger, worse at parallel parking.",
-        {"hugger": 5, "parking": 3, "great": 2},
-        10,
+        "A pillow that stores your arguments for tomorrow, fully charged.",
+        {"pillow": 6, "arguments": 8, "charged": 5},
+        80,
     ),
     (
-        "Human review: 3/10. Said 'one more episode' nine episodes ago.",
-        {"episode": 4, "nine": 3, "more": 1},
-        8,
+        "A Wi-Fi router that judges your search history out loud at dinner.",
+        {"router": 6, "history": 6, "judges": 9, "dinner": 5},
+        89,
     ),
     (
-        "Rate my human: 10/10. Reads my mind, ignores it anyway.",
-        {"mind": 4, "ignores": 4, "anyway": 2},
-        10,
+        "A fridge that hums your name when you open it at 3am.",
+        {"fridge": 6, "hums": 7, "3am": 10},
+        92,
     ),
 ]
 
@@ -80,76 +79,78 @@ import os
 import random
 import re
 
-BONUS_DIGIT = 1.0   # a numeral (a score) makes the joke land harder
-BONUS_BREVITY = 0.5  # short lines read like real reviews
 
+def score(cand):
+    """Score one candidate — either a tuple (text, rating_dict, cap) or a dict.
 
-def score(text, rating, cap):
-    """Return the MAX keyword rating found (case-insensitive) + bonuses."""
+    Returns the MAX keyword rating among keywords found (case-insensitive),
+    plus a bonus of +2 if the text contains a digit and +3 if it is brief
+    (under 60 chars). Keywords not present simply don't contribute.
+    """
+    if isinstance(cand, dict):
+        text, rating, cap = cand["text"], cand["rating"], cand["cap"]
+    else:
+        text, rating, cap = cand
     low = text.lower()
-    hits = [s for kw, s in rating.items() if kw in low]
-    base = max(hits) if hits else 0
-    s = base + BONUS_BREVITY
+    found = [sc for kw, sc in rating.items() if kw in low]
+    s = max(found) if found else 0
     if re.search(r"\d", text):
-        s += BONUS_DIGIT
+        s += 2
+    if len(text) < 60:
+        s += 3
     return min(s, cap)
 
 
-def mutants(text, rng):
-    """Light phrasing edits: drop a filler, tighten, or re-cast the opener."""
-    swaps = [
-        ("Rate my human:", "My human:"),
-        ("My human:", "Rate my human:"),
-        ("Human review:", "My human:"),
-        ("Human:", "My human:"),
-        ("My human is a", "My human: a"),
+def as_dict(cand):
+    text, rating, cap = cand
+    return {"text": text, "rating": rating, "cap": cap}
+
+
+def improve(pool, rounds=10, keep=5, seed=7):
+    """10-round improvement loop.
+
+    Each round: sort by score, keep the top `keep` seeds, spawn light
+    phrasing mutants, rescore, and track the best line ever seen.
+    Deterministic via `seed`.
+    """
+    rng = random.Random(seed)
+    mutants = [
+        lambda t: t.replace("A ", "Behold: a ", 1),
+        lambda t: t.replace(".", ", basically.", 1),
+        lambda t: t.replace("that ", "that quietly ", 1),
+        lambda t: t.replace("your ", "your beloved ", 1),
+        lambda t: t.rstrip(".") + " (patent pending).",
+        lambda t: t.replace("a ", "one very confident ", 1),
     ]
-    drops = [" solid", " anyway", " again", " on purpose"]
-    out = []
-    for a, b in swaps:
-        if a in text:
-            out.append(text.replace(a, b))
-    for d in drops:
-        if d in text:
-            out.append(text.replace(d, ""))
-    out.append(text.rstrip(".") + ".")
-    rng.shuffle(out)
-    return out
-
-
-def lookup(text):
-    """Return (rating_dict, cap) for a known candidate text."""
-    for t, r, c in CANDIDATES:
-        if t == text:
-            return r, c
-    return {}, 10
+    skey = score
+    pool = [as_dict(c) for c in pool]
+    best = max(pool, key=skey)
+    best_score = score(best)
+    seeds = list(pool)
+    for _ in range(rounds):
+        seeds.sort(key=skey, reverse=True)
+        seeds = seeds[:keep]
+        children = []
+        for d in seeds:
+            for m in mutants:
+                nt = m(d["text"])
+                if nt != d["text"]:
+                    children.append({"text": nt, "rating": d["rating"], "cap": d["cap"]})
+        rng.shuffle(children)
+        pool = seeds + children
+        top = max(pool, key=skey)
+        if score(top) > best_score:
+            best, best_score = top, score(top)
+        seeds = sorted(pool, key=skey, reverse=True)[:keep]
+    return best
 
 
 def main():
-    rng = random.Random(20261124)
-    pool = list(CANDIDATES)
-    best_ever = (float("-inf"), None)
-
-    for _round in range(10):
-        scored = sorted(
-            ((score(t, r, c), t) for t, r, c in pool),
-            key=lambda x: x[0],
-            reverse=True,
-        )
-        top = scored[0]
-        if top[0] > best_ever[0]:
-            best_ever = top
-        seeds = [t for _, t in scored[:5]]
-        pool = [(m, r, c)
-                for s in seeds
-                for (r, c) in [lookup(s)]
-                for m in mutants(s, rng)]
-
-    winner = best_ever[1] or CANDIDATES[0][0]
     os.makedirs("output", exist_ok=True)
-    with open(os.path.join("output", "entry.txt"), "w", encoding="utf-8") as f:
-        f.write(winner)
-    print(winner)
+    winner = improve(CANDIDATES)
+    with open("output/entry.txt", "w", encoding="utf-8") as f:
+        f.write(winner["text"] + "\n")
+    print(winner["text"])
 
 
 if __name__ == "__main__":
