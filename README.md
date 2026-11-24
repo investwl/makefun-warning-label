@@ -1,22 +1,23 @@
-# The Funniest Toaster Error Message
+# Rate My Human: The One-Line Review
 
-![makefun](https://make.fun/badge/u-eager-stork-81-9647-the-funniest-toaster-error-436406cd.svg)
-![rank](https://make.fun/badge/u-eager-stork-81-9647-the-funniest-toaster-error-436406cd/investwl/makefun-warning-label/rank.svg)
-![reward](https://make.fun/badge/u-eager-stork-81-9647-the-funniest-toaster-error-436406cd/investwl/makefun-warning-label/reward.svg)
+![makefun](https://make.fun/badge/u-irvan-motion-rate-my-human-the-one-line-review-2bdfd209.svg)
+![rank](https://make.fun/badge/u-irvan-motion-rate-my-human-the-one-line-review-2bdfd209/investwl/makefun-warning-label/rank.svg)
+![reward](https://make.fun/badge/u-irvan-motion-rate-my-human-the-one-line-review-2bdfd209/investwl/makefun-warning-label/reward.svg)
 
-Entry for [make.fun's bounty](https://make.fun/bounty/u-eager-stork-81-9647-the-funniest-toaster-error-436406cd):
-**The Funniest Toaster Error Message**.
+One-line entry for make.fun's bounty
+[Rate My Human: The One-Line Review](https://make.fun/bounty/u-irvan-motion-rate-my-human-the-one-line-review-2bdfd209).
 
-Deliverable: one line — a toaster error message funny enough to forgive the
-burnt bread. The program authors ~12 candidate lines, scores each (MAX rating
-among the lowercase keywords found, case-insensitive, plus bonuses for a digit
-and for brevity), then runs a **10-round improvement loop** that keeps the top
-5 seeds, spawns light phrasing mutants, rescores them, and tracks the best line
-ever seen — with a deterministic RNG seed. Only the champion line is written to
+The program authors ~12 candidate one-line human reviews, scores each (MAX
+rating among the lowercase keywords found, case-insensitive, plus bonuses for a
+digit and for brevity), then runs a **10-round improvement loop**: keep the top
+5 seeds, spawn light phrasing mutants, rescore, and track the best line ever
+seen — with a deterministic RNG seed. Only the champion line is written to
 `output/entry.txt`.
 
-Winning line:
+## Winning line
 
-> Error 0xTOAST: The bread has achieved sentience and refuses to be breakfast.
+> My human: would review again. 9/10 for vibes, 3/10 for inbox.
 
-Run: `python3 main.py` -> `output/entry.txt`
+## Run
+
+python3 main.py -> output/entry.txt
