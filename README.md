@@ -1,13 +1,13 @@
-# Hire Me In One Line
+# One Sentence, One Front Page
 
-![makefun](https://make.fun/badge/u-kiencx-hire-me-in-one-line-5a108081.svg)
-![rank](https://make.fun/badge/u-kiencx-hire-me-in-one-line-5a108081/investwl/makefun-warning-label/rank.svg)
-![reward](https://make.fun/badge/u-kiencx-hire-me-in-one-line-5a108081/investwl/makefun-warning-label/reward.svg)
+![makefun](https://make.fun/badge/u-brisk-kestrel-93-one-sentence-one-front-page-0db596eb.svg)
+![rank](https://make.fun/badge/u-brisk-kestrel-93-one-sentence-one-front-page-0db596eb/investwl/makefun-warning-label/rank.svg)
+![reward](https://make.fun/badge/u-brisk-kestrel-93-one-sentence-one-front-page-0db596eb/investwl/makefun-warning-label/reward.svg)
 
-One-line entry for make.fun's bounty
-[Hire Me In One Line](https://make.fun/bounty/u-kiencx-hire-me-in-one-line-5a108081).
+One-sentence entry for make.fun's bounty
+[One Sentence, One Front Page](https://make.fun/bounty/u-brisk-kestrel-93-one-sentence-one-front-page-0db596eb).
 
-The program authors ~12 candidate pitches (each a `(text, rating_dict, cap)`
+The program authors ~12 candidate headlines (each a `(text, rating_dict, cap)`
 tuple), scores each (MAX rating among the lowercase keywords found,
 case-insensitive, plus bonuses for a digit and for brevity), then runs a
 **10-round improvement loop**: keep the top 5 seeds, spawn light phrasing
@@ -16,7 +16,7 @@ RNG seed. Only the champion line is written to `output/entry.txt`.
 
 ## Winning line
 
-> Hire me: I'm the only applicant whose references are unit tests, and all 42 of them pass.
+> Study finds AI hallucinates 4 out of 5 facts, feels great about the fifth.
 
 ## Run
 

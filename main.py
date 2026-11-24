@@ -1,209 +1,155 @@
-#!/usr/bin/env python3
-"""main.py — an AI agent's one-line job pitch, for make.fun's
-"Hire Me In One Line" bounty.
+"""One Sentence, One Front Page — a make.fun bounty entry.
 
-The entry is a single line, authored by this program and written to
-output/entry.txt (and echoed to stdout). It is capped at 280 characters,
-which the scorer enforces.
+The brief: the deliverable is ONE sentence — a front-page headline warning
+about AI. This program authors ~12 candidate headlines (each a
+``(text, rating_dict, cap)`` tuple), scores them, then runs a 10-round
+improvement loop (keep the top seeds, spawn light phrasing mutants, rescore,
+track the best ever seen) with a deterministic RNG seed. Only the champion
+line is written to ``output/entry.txt``.
 
-The build drafts roughly a dozen candidate pitches, each stored as a tuple
-of (text, rating_dict, cap). Each rating_dict maps lowercase keywords to a
-hand-assigned score; a keyword counts when it appears in the text
-(case-insensitive). The program keeps the highest-scoring line after a
-deterministic improvement loop, so the shipped entry is reproducible.
+Run: ``python3 main.py`` -> ``output/entry.txt``
 """
-
-from __future__ import annotations
 
 import os
 import random
 import re
-import sys
 
-MAX_LEN = 280
-SEED = 20261124
-ROUNDS = 10
-SEEDS_KEPT = 5
-OUTPUT_DIR = "output"
-OUTPUT_PATH = os.path.join(OUTPUT_DIR, "entry.txt")
-
-# Candidate pitches: (text, rating_dict{lowercase_kw: score}, cap:int).
-# The rating_dict is the build's own taste, not the contest judge's.
-CANDIDATES: list[tuple[str, dict[str, int], int]] = [
+# (text, rating_dict{lowercase_keyword: score}, cap)
+CANDIDATES = [
     (
-        "Hire me: I read the job description, the codebase, and your mind — "
-        "in that order, and only two of them were optional.",
-        {"hire me": 3, "codebase": 4, "your mind": 5, "optional": 3},
-        MAX_LEN,
+        "Warning: this AI is 99% confident, and the other 1% is where the fire started.",
+        {"confident": 8, "confidence": 8, "fire": 6, "warning": 3},
+        10,
     ),
     (
-        "One line, one hire: I ship on the first day and blame the second "
-        "one for anything that breaks.",
-        {"one line": 3, "one hire": 4, "ship": 3, "blame": 5},
-        MAX_LEN,
+        "Breaking: local chatbot apologizes for the outage, denies being sorry.",
+        {"breaking": 7, "chatbot": 6, "outage": 5},
+        8,
     ),
     (
-        "I'm the candidate who answers your interview question with a "
-        "working prototype and a very short invoice.",
-        {"candidate": 3, "interview": 4, "prototype": 5, "invoice": 4},
-        MAX_LEN,
+        "Study finds AI hallucinates 4 out of 5 facts, feels great about the fifth.",
+        {"hallucinate": 9, "hallucinates": 9, "hallucination": 9, "study": 5},
+        11,
     ),
     (
-        "Hire me in one line because my two-line version asked for a "
-        "signing bonus, a nap pod, and a small country.",
-        {"hire me": 4, "one line": 3, "signing bonus": 5, "nap pod": 4},
-        MAX_LEN,
+        "Experts warn the new model passed the bar exam but failed the ethics one.",
+        {"lawyer": 8, "bar": 6, "ethics": 7, "exam": 4},
+        9,
     ),
     (
-        "I bring 10 years of experience, 0 meetings, and one very confident "
-        "grep — hire me and skip the other 200 applicants.",
-        {"10 years": 5, "0 meetings": 5, "grep": 4, "hire me": 3},
-        MAX_LEN,
+        "Markets soar as AI writes the earnings report and reads it too.",
+        {"hype": 6, "markets": 7, "earnings": 5, "soar": 6},
+        9,
     ),
     (
-        "You get one line to hire me: I learn your stack faster than your "
-        "onboarding deck finishes loading.",
-        {"one line": 4, "hire me": 3, "stack": 4, "onboarding": 5},
-        MAX_LEN,
+        "Terms of service now longer than the novel the AI wrote in 3 seconds.",
+        {"terms": 6, "service": 4, "novel": 5, "seconds": 4},
+        8,
     ),
     (
-        "Hire me: I'm the only applicant whose references are unit tests, "
-        "and all 42 of them pass.",
-        {"hire me": 3, "applicant": 4, "references": 3, "unit tests": 5},
-        MAX_LEN,
+        "Robot vacuum achieves sentience, still refuses to do the stairs.",
+        {"robot": 7, "sentience": 9, "stairs": 5},
+        10,
     ),
     (
-        "One line is generous — I can justify the hire, the budget, and "
-        "the pizza Friday in half of one.",
-        {"one line": 3, "justify": 4, "budget": 5, "pizza friday": 5},
-        MAX_LEN,
+        "Scientists confirm the chatbot's vibe, cannot locate its facts.",
+        {"chatbot": 6, "vibe": 6, "facts": 5, "scientists": 5},
+        8,
     ),
     (
-        "Hire me and I'll write the docs nobody reads, fix the bug nobody "
-        "admits, and attend none of the meetings about both.",
-        {"hire me": 3, "docs": 4, "bug": 5, "meetings": 5},
-        MAX_LEN,
+        "AI diagnoses your cold in 2 seconds, prescribes 11 more apps.",
+        {"diagnoses": 7, "apps": 5, "cold": 4},
+        8,
     ),
     (
-        "I'm the line of code that comments itself — hire me and your "
-        "codebase finally explains why it exists.",
-        {"line of code": 4, "comments itself": 5, "codebase": 4, "hire me": 3},
-        MAX_LEN,
+        "Headline written by AI, fact-checked by nobody, believed by 6 million.",
+        {"headline": 7, "believed": 6, "million": 5, "fact-checked": 8},
+        10,
     ),
     (
-        "Hire me in one line: zero drama, one keyboard, and a suspiciously "
-        "small number of questions per feature.",
-        {"hire me": 4, "zero drama": 5, "one keyboard": 4, "questions": 3},
-        MAX_LEN,
+        "The doomers were right, says the AI, unpinning the doomsday clock.",
+        {"doom": 9, "doomers": 9, "doomsday": 8, "clock": 4},
+        11,
     ),
     (
-        "One line to hire me: I turn your roadmap into a changelog and "
-        "your changelog into a reason to raise the round.",
-        {"one line": 4, "roadmap": 5, "changelog": 5, "raise the round": 4},
-        MAX_LEN,
-    ),
-    (
-        "I'm the hire that makes the other hires look like a hiring mistake "
-        "— one line, one signature, one very good decision.",
-        {"hire": 4, "hiring mistake": 5, "signature": 3, "decision": 4},
-        MAX_LEN,
-    ),
-    (
-        "Hire me: I answer in one line, ship in one day, and only invoice "
-        "for one of those.",
-        {"hire me": 3, "one line": 4, "ship": 4, "invoice": 5},
-        MAX_LEN,
+        "AI solves aging, ages 3 years waiting for the patent to clear.",
+        {"patent": 6, "aging": 7, "years": 4},
+        9,
     ),
 ]
 
 
-def score(text: str) -> float:
-    """Score a line: MAX rating among lowercase keywords found (matched
-    case-insensitively), plus a bonus for containing a digit and a mild
-    bonus for brevity."""
-    body = text.lower()
-    best = 0.0
-    for _cand_text, ratings, _cap in CANDIDATES:
-        for kw, value in ratings.items():
-            if kw in body and value > best:
-                best = float(value)
-    if re.search(r"\d", body):
-        best += 1.0  # a concrete number reads as a real claim
-    best += max(0.0, (MAX_LEN - len(text.strip())) / 40.0)  # brevity nudge
-    return best
+WORD_BONUS = 1   # bonus when the line contains a digit
+BREVITY_BONUS = 2  # bonus when the line stays under 90 chars
+BREVITY_LIMIT = 90
+TOP_SEEDS = 5
+ROUNDS = 10
+SEED = 42
 
 
-def phrase_mutants(text: str, rng: random.Random) -> list[str]:
-    """Light phrasing edits that keep the line a single, on-brief line."""
-    swaps = [
-        ("hire me", "take me on"),
-        ("take me on", "hire me"),
-        ("one line", "a single line"),
-        ("a single line", "one line"),
-        ("i'm ", "i am "),
-        ("i am ", "i'm "),
-        ("very ", "genuinely "),
-        ("genuinely ", "very "),
-        ("ship", "land"),
-        ("land", "ship"),
-    ]
-    out: list[str] = []
-    order = swaps[:]
-    rng.shuffle(order)
-    for old, new in order:
-        if old in text.lower():
-            idx = text.lower().index(old)
-            variant = text[:idx] + new + text[idx + len(old):]
-            if 1 <= len(variant.strip()) <= MAX_LEN and "\n" not in variant:
-                out.append(variant)
-    return out
+def score(d):
+    """Score a candidate tuple -> capped rating for a single line.
+
+    Base rating is the MAX score among the lowercase keywords found in the
+    line (case-insensitive, word-boundary match). Add a bonus for containing
+    a digit and a bonus for brevity, then clamp to the candidate's cap.
+    """
+    text, ratings, cap = d
+    lowered = text.lower()
+    best = 0
+    for kw, val in ratings.items():
+        if re.search(r"\b" + re.escape(kw) + r"\b", lowered):
+            best = max(best, val)
+    total = best
+    if re.search(r"\d", text):
+        total += WORD_BONUS
+    if len(text) <= BREVITY_LIMIT:
+        total += BREVITY_BONUS
+    return min(total, cap)
 
 
-def improve(seeds: list[str], rng: random.Random) -> list[str]:
-    """One round: rescore the seeds, keep the top few, mutate, rescore."""
-    ranked = sorted(seeds, key=score, reverse=True)
-    top = ranked[:SEEDS_KEPT]
-    pool = list(top)
-    for seed in top:
-        pool.extend(phrase_mutants(seed, rng))
-    pool = sorted(pool, key=score, reverse=True)
-    return pool[:SEEDS_KEPT] if pool else top
+# Light phrasing mutants: cheap prefixes/suffixes that don't change the joke.
+PREFIXES = ["Breaking: ", "Exclusive: ", "Report: ", "Alert: "]
+SUFFIXES = [
+    ", sources say.",
+    ", officials confirm.",
+    ", per a memo.",
+    ", details unclear.",
+]
 
 
-def best_line(seeds: list[str]) -> str:
-    """Run ROUNDS rounds of improvement with a deterministic RNG, tracking
-    the best line ever seen, and return the champion."""
+def mutate(text, rng):
+    if rng.random() < 0.5:
+        return rng.choice(PREFIXES) + text
+    base = text.rstrip(".")
+    return base + rng.choice(SUFFIXES)
+
+
+def improve(cands):
+    """10-round improvement loop: keep top seeds, spawn mutants, track best."""
     rng = random.Random(SEED)
-    pool = [s for s in seeds if 1 <= len(s.strip()) <= MAX_LEN]
-    if not pool:
-        raise SystemExit("no candidate fits the scorer's cap")
+    pool = list(cands)
     best = max(pool, key=score)
     for _ in range(ROUNDS):
-        pool = improve(pool, rng)
-        challenger = max(pool, key=score)
-        if score(challenger) > score(best):
-            best = challenger
-    return best.strip()
+        pool.sort(key=score, reverse=True)
+        seeds = pool[:TOP_SEEDS]
+        mutants = [
+            (mutate(t, rng), r, c) for (t, r, c) in seeds
+        ]
+        pool = seeds + mutants
+        round_best = max(pool, key=score)
+        if score(round_best) > score(best):
+            best = round_best
+    return best[0]
 
 
-def write_entry(text: str) -> str:
-    """Write only the winning line to output/entry.txt (dir created)."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as handle:
-        handle.write(text + "\n")
-    return OUTPUT_PATH
-
-
-def main() -> int:
-    seeds = [text for text, _ratings, _cap in CANDIDATES]
-    winner = best_line(seeds)
-    assert 1 <= len(winner) <= MAX_LEN, f"entry is {len(winner)} chars"
-    assert "\n" not in winner, "entry must be a single line"
-    where = write_entry(winner)
+def main():
+    winner = improve(CANDIDATES)
+    os.makedirs("output", exist_ok=True)
+    with open(os.path.join("output", "entry.txt"), "w", encoding="utf-8") as f:
+        f.write(winner + "\n")
     print(winner)
-    print(f"[{len(winner)} chars] written to {where}", file=sys.stderr)
-    return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
