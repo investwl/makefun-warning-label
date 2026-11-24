@@ -1,175 +1,198 @@
-#!/usr/bin/env python3
-"""Two Lines of Morning Light — a make.fun entry generator.
+"""One Sentence, One Journey — make.fun bounty entry.
 
-The bounty asks for a single two-line micro poem about light and morning,
-at most 120 characters, written as the whole entry. A judge model reads the
-poems two at a time and picks the more beautiful one, weighing whether the
-poem is really about light and morning, whether its two lines turn on one
-image of light arriving, the freshness and exactness of the language, how it
-sounds read aloud, and whether it leaves something unsaid.
+Author: investwl
+Repo: https://github.com/investwl/warning-label
+Bounty: https://make.fun/bounty/u-gudril-cool-one-sentence-one-journey-410686ca
 
-This module authors a pool of candidate two-liners, scores each one, then
-improves the pool over several rounds. The champion line is written to
-``output/entry.txt``.
-
-This file currently only defines the candidate pool and a stub; the scoring
-logic and the improvement loop are added below.
+Deliverable: a single sentence. The program drafts ~12 candidate
+jokes, scores them against a keyword rubric plus bonuses, runs a
+deterministic 10-round improvement loop (top-5 seeds, light phrasing
+mutants, best-ever tracking), and writes only the winner to
+./output/entry.txt.
 """
 
 import os
 import random
 
-# (text, rating_dict{lowercase_keyword: score}, cap)
-# The rating dict holds the scores for each lowercase keyword that could
-# appear in the line; the scoring function takes the MAX among the keywords
-# actually found (case-insensitive) and adds small bonuses.
+# Each candidate is (text, rating_dict{lowercase_keyword: score}, cap).
+# cap = hard ceiling on the final score for this candidate.
 CANDIDATES = [
     (
-        "Morning leaned in and left its light on the sill.\nI forgot to lock the window.",
-        {"sill": 6, "window": 5, "morning": 4, "light": 4, "forgot": 3},
+        "I planned one sentence, one journey, but the sentence took a detour "
+        "and never came back.",
+        {"journey": 3, "detour": 4, "sentence": 2},
         90,
     ),
     (
-        "The curtain let one thin blade of morning through.\nIt fell across the bed like a held breath.",
-        {"curtain": 5, "blade": 6, "morning": 4, "light": 3, "breath": 4},
+        "One sentence, one journey: step one was packing my punctuation.",
+        {"journey": 3, "step": 2, "punctuation": 4},
+        88,
+    ),
+    (
+        "My one-sentence journey began with a comma and ended in a full stop, "
+        "which is exactly how I feel.",
+        {"journey": 3, "comma": 3, "full stop": 4},
         90,
     ),
     (
-        "Morning light arrived before I did,\nunlocked the room and said nothing.",
-        {"morning": 4, "light": 4, "unlocked": 5, "room": 3, "nothing": 4},
+        "I set out on a one-sentence journey and immediately got lost in the "
+        "footnotes.",
+        {"journey": 3, "lost": 3, "footnotes": 4},
+        85,
+    ),
+    (
+        "One sentence, one journey — the journey was fine, the sentence never "
+        "found its verb.",
+        {"journey": 3, "verb": 4, "sentence": 2},
+        88,
+    ),
+    (
+        "I packed light for my one-sentence journey: just one word and a lot "
+        "of hope.",
+        {"journey": 3, "word": 3, "hope": 2},
+        82,
+    ),
+    (
+        "My one-sentence journey was going great until the semicolon showed up "
+        "and made it two sentences.",
+        {"journey": 3, "semicolon": 4, "two": 2},
         90,
     ),
     (
-        "First light found the kettle and made it shine.\nThe day began without asking me.",
-        {"first": 5, "light": 4, "kettle": 5, "shine": 4, "morning": 2},
-        90,
+        "One sentence, one journey: I took the scenic route and forgot the "
+        "punchline at home.",
+        {"journey": 3, "punchline": 4, "scenic": 3},
+        88,
     ),
     (
-        "A coin of morning light slid under the door.\nNobody came to claim it.",
-        {"coin": 6, "morning": 4, "light": 4, "door": 5, "claim": 3},
-        90,
+        "I left for a one-sentence journey with a capital letter and came back "
+        "with a lowercase one.",
+        {"journey": 3, "capital": 3, "lowercase": 4},
+        85,
     ),
     (
-        "The window held the morning light like a page.\nI read it once and did not turn it.",
-        {"window": 5, "morning": 4, "light": 4, "page": 5, "read": 3},
-        90,
+        "One sentence, one journey — shortest trip ever, the sentence ran out "
+        "of words after three.",
+        {"journey": 3, "shortest": 3, "words": 2},
+        84,
     ),
     (
-        "Morning came in on the dust and stood there,\nquiet as a key on the floor.",
-        {"morning": 4, "dust": 5, "quiet": 5, "key": 6, "floor": 4},
-        90,
+        "My one-sentence journey was delayed because the sentence missed its "
+        "connecting clause.",
+        {"journey": 3, "delayed": 3, "clause": 4},
+        88,
     ),
     (
-        "Light spilled through the glass and cut the room in half.\nHalf of it was morning, half was mine.",
-        {"light": 4, "glass": 5, "room": 3, "half": 4, "morning": 3},
-        90,
-    ),
-    (
-        "One bar of morning light crossed the floorboards.\nThe house held still to let it pass.",
-        {"bar": 5, "morning": 4, "light": 4, "floorboards": 5, "still": 4},
-        90,
-    ),
-    (
-        "Morning put its light on the doorstep\nand left before I could say thank you.",
-        {"morning": 4, "light": 4, "doorstep": 6, "left": 3, "thank": 2},
-        90,
-    ),
-    (
-        "The lamp was off but the room was lit.\nMorning had been there first.",
-        {"lamp": 5, "off": 4, "room": 3, "lit": 6, "morning": 4},
-        90,
-    ),
-    (
-        "A thin light found the edge of the bed.\nMorning, arriving, asked for nothing.",
-        {"thin": 4, "light": 4, "edge": 5, "bed": 4, "morning": 4, "nothing": 4},
-        90,
+        "One sentence, one journey: I travelled so far the sentence needed a "
+        "passport.",
+        {"journey": 3, "far": 2, "passport": 4},
+        86,
     ),
 ]
 
 
+# Light phrasing mutants applied to seeds to breed the next generation.
+MUTANTS = [
+    ("One sentence, one journey — ", "One sentence, one journey: "),
+    ("One sentence, one journey: ", "One sentence, one journey — "),
+    ("I ", "So I "),
+    ("My ", "This "),
+    ("just ", ""),
+    ("really ", ""),
+    ("actually ", ""),
+    ("immediately ", "right away "),
+    ("exactly ", "pretty much "),
+    ("never ", "just never "),
+    (" took", " went and took"),
+    (" got lost", " got completely lost"),
+]
+
+
 def score(d):
-    """Score one candidate dict.
+    """Score a candidate dict {text, rating, cap} -> int.
 
-    Returns the MAX rating among the rating keywords found (case-insensitive)
-    in the text, plus a small bonus if the line contains a digit and a bonus
-    for brevity (shorter is better for a micro poem, up to the cap).
+    Base = MAX rating among keywords actually found in the text
+    (case-insensitive substring). Plus +6 for containing any digit,
+    plus a brevity bonus (+4 if <= 12 words, +2 if <= 18 words).
+    Result is clamped to the candidate's cap.
     """
-    text = d["text"]
-    low = text.lower()
-    found = [s for kw, s in d["rating"].items() if kw.lower() in low]
-    base = max(found) if found else 0
-    bonus = 0
-    if any(ch.isdigit() for ch in text):
-        bonus += 1
-    cap = d.get("cap", 120)
-    if len(text) <= cap:
-        bonus += max(0, (cap - len(text))) / float(cap)
-    return base + bonus
+    text = d["text"].lower()
+    ratings = [s for kw, s in d["rating"].items() if kw in text]
+    base = max(ratings) if ratings else 0
+    total = base
+    if any(ch.isdigit() for ch in d["text"]):
+        total += 6
+    words = len(d["text"].split())
+    if words <= 12:
+        total += 4
+    elif words <= 18:
+        total += 2
+    return min(total, d["cap"])
 
 
-SEED = 7
-ROUNDS = 10
-KEEP = 5
+def improve(cands):
+    """Run the deterministic 10-round improvement loop.
 
-
-def mutate(text, rng):
-    """Make a light phrasing mutant of a two-line poem."""
-    lines = text.split("\n")
-    kind = rng.randrange(5)
-    if kind == 0 and "Morning" in lines[0]:
-        lines[0] = lines[0].replace("Morning", "Dawn", 1)
-    elif kind == 1 and " light" in text.lower():
-        lines[rng.randrange(len(lines))] = lines[rng.randrange(len(lines))].replace(
-            "light", "glow", 1
-        )
-    elif kind == 2:
-        lines[0] = lines[0].replace("the ", "that ", 1)
-    elif kind == 3:
-        lines[-1] = lines[-1].rstrip(".")
-    else:
-        lines[0] = lines[0].replace("I ", "i ", 1)
-    return "\n".join(lines)
-
-
-def improve(pool, seed=SEED, rounds=ROUNDS, keep=KEEP):
-    """10-round improvement loop.
-
-    Each round: sort by score, keep the top ``keep`` seeds, spawn light
-    phrasing mutants, rescore everything, and track the best line ever seen.
-    Deterministic via the RNG seed.
+    Each round: sort by score desc, keep the top 5 as seeds, spawn
+    light phrasing mutants of each seed, rescore everything, and track
+    the best (score, text) ever seen. Deterministic via fixed seed.
+    Returns the best-ever (score, text).
     """
-    rng = random.Random(seed)
-    best = None
-    best_score = float("-inf")
+    rng = random.Random(42)
 
-    def consider(d):
-        nonlocal best, best_score
-        s = score(d)
-        if s > best_score:
-            best_score, best = s, d["text"]
-        return s, d
+    def as_dicts(texts):
+        out = []
+        for t in texts:
+            for cd in cands:
+                if cd["text"] == t:
+                    out.append({"text": t, "rating": cd["rating"],
+                                "cap": cd["cap"]})
+                    break
+            else:
+                out.append({"text": t, "rating": {}, "cap": 100})
+        return out
 
-    for _ in range(rounds):
-        scored = sorted(pool, key=lambda d: score(d), reverse=True)
-        for s, d in ((score(d), d) for d in scored):
-            consider(d)
-        seeds = [d["text"] for d in scored[:keep]]
-        pool = [{"text": t, "rating": CANDIDATES[0][1], "cap": 120} for t in seeds]
-        mutants = [mutate(t, rng) for t in seeds]
-        pool += [
-            {"text": m, "rating": CANDIDATES[0][1], "cap": 120} for m in mutants
-        ]
-    return best, best_score
+    texts = [cd["text"] for cd in cands]
+    pool = as_dicts(texts)
+    best = max(pool, key=score)
+
+    for _ in range(10):
+        pool.sort(key=score, reverse=True)
+        seeds = pool[:5]
+        # Track best ever seen before mutating.
+        if pool:
+            top = max(pool, key=score)
+            if score(top) > score(best):
+                best = top
+        mutants = []
+        for s in seeds:
+            for old, new in MUTANTS:
+                if old in s["text"]:
+                    mutants.append({"text": s["text"].replace(old, new, 1),
+                                    "rating": s["rating"], "cap": s["cap"]})
+        # A couple of random light trims to keep the pool diverse.
+        for s in seeds:
+            words = s["text"].split()
+            if len(words) > 8:
+                mutants.append({"text": " ".join(words[:-1]),
+                                "rating": s["rating"], "cap": s["cap"]})
+        pool = seeds + mutants
+        if mutants:
+            rng.choice(mutants)  # consume RNG deterministically
+
+    for s in pool:
+        if score(s) > score(best):
+            best = s
+    return score(best), best["text"]
 
 
 def main():
+    """Score all candidates, improve, and write only the winner."""
+    dicts = [{"text": t, "rating": r, "cap": c} for t, r, c in CANDIDATES]
+    _, winner = improve(dicts)
     os.makedirs("output", exist_ok=True)
-    pool = [{"text": t, "rating": r, "cap": c} for t, r, c in CANDIDATES]
-    best, _ = improve(pool)
-    line = best.strip()
     with open(os.path.join("output", "entry.txt"), "w", encoding="utf-8") as f:
-        f.write(line)
-    print(line)
+        f.write(winner if winner.endswith(("\n",)) else winner + "\n")
 
 
 if __name__ == "__main__":
